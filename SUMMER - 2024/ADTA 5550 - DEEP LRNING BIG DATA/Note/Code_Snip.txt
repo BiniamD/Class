@@ -1,0 +1,31 @@
+Some useful command I showed you (need changes for your use)
+abc@gmail.com
+
+ 
+
+ID: abc-abc-abc
+Name: unt-project
+Instance Name: deep-learning-vm-example
+ZONE  us-south1-c
+
+ 
+
+export IMAGE_FAMILY="tf-ent-1-15-cpu"
+export ZONE="us-south1-c"
+export DISK_TYPE="pd-standard"
+export INSTANCE_NAME="deep-learning-vm-example"
+export INSTANCE_TYPE="e2-standard-8"
+gcloud compute instances create $INSTANCE_NAME \
+ --zone=$ZONE \
+ --image-family=$IMAGE_FAMILY \
+ --image-project=deeplearning-platform-release \
+ --machine-type=$INSTANCE_TYPE \
+ --boot-disk-type=$DISK_TYPE \
+ --boot-disk-size=1024GB
+
+gcloud compute ssh biniamabebe@dadta5550dplrn
+gcloud compute ssh biniamabebe@deep-learning-vm-example --project adta5550dplrn --zone us-south1-c
+
+jupyter notebook --port=8888
+
+gcloud compute ssh biniamabebe@deep-learning-vm-example --project adta5550dplrn --zone us-south1-c -- -L 8000:localhost:8888
