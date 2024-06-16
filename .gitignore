@@ -1,5 +1,5 @@
-*.pdf
+#*.pdf
 *.gz
 *.tar
 *.tar.gz
-
+Note
