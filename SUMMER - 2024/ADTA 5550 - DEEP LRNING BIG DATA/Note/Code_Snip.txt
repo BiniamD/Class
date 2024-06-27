@@ -25,6 +25,7 @@ gcloud compute instances create $INSTANCE_NAME \
 
 gcloud compute ssh biniamabebe@dadta5550dplrn
 gcloud compute ssh biniamabebe@deep-learning-vm-example --project adta5550dplrn --zone us-south1-c
+gcloud.CMD compute ssh deep-learning-vm-example --project adta5550dplrn --zone us-south1-c
 
 jupyter notebook --port=8888
 
