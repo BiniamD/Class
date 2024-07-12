@@ -2,4 +2,6 @@
 *.gz
 *.tar
 *.tar.gz
+*.zip
+IPEDS*.csv
 Note
