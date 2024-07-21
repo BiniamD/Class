@@ -5,3 +5,6 @@
 *.zip
 IPEDS*.csv
 Note
+*.meta
+*_batch*
+readme.html
