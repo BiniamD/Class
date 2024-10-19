@@ -7,4 +7,6 @@ IPEDS*.csv
 Note
 *.meta
 *_batch*
+*.mp4*
+*.tmp*
 readme.html
