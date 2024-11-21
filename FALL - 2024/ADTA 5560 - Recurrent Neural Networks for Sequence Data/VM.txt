@@ -1,0 +1,32 @@
+gcloud compute ssh recurrent-nn-vm --project adta5560rnnsd --zone us-south1-c
+gcloud compute ssh --ssh-flag="-L 9999:localhost:9999"  --zone "us-south1-c" "biniam_drive@recurrent-nn-vm"
+gcloud compute ssh biniam_drive@recurrent-nn-vm --project adta5560rnnsd --zone us-south1-c
+gcloud compute ssh biniam_drive@recurrent-nn-vm --project adta5560rnnsd --zone us-south1-c -- -L 9999:localhost:9999
+
+
+gcloud compute instances detach-disk tf-ent-1-15-cpu-v20221107 --disk=DISK --zone=us-south1-c
+gcloud beta compute instances attach-disk NAME --disk=DISK --zone=ZONE --boot
+debian-10-tf-2-1-1-v20200519
+
+
+export IMAGE_FAMILY="tf-ent-2-11-cpu"
+export ZONE="us-south1-c"
+export DISK_TYPE="pd-standard"
+export INSTANCE_NAME="recurrent-nnr-vm"
+export INSTANCE_TYPE="e2-standard-8"
+gcloud compute instances create $INSTANCE_NAME \
+ --zone=$ZONE \
+ --image-family=$IMAGE_FAMILY \
+ --image-project=deeplearning-platform-release \
+ --machine-type=$INSTANCE_TYPE \
+ --boot-disk-type=$DISK_TYPE \
+ --boot-disk-size=1024GB
+
+
+ssh
+jupyter lab --ip=0.0.0.0 --port=8081 --no-browser --allow-root
+
+google SDK
+gcloud compute ssh recurrent-nnr-vm --zone=us-south1-c -- -L 8081:localhost:8081
+
+

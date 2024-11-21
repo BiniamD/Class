@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400">
+    <!-- Background -->
+    <rect width="800" height="400" fill="#ffffff"/>
+    
+    <!-- Title -->
+    <text x="400" y="40" text-anchor="middle" font-family="Arial" font-size="24" font-weight="bold">Simple RNN (SRNN) Architecture</text>
+    
+    <!-- Time steps labels -->
+    <text x="100" y="80" text-anchor="middle" font-family="Arial" font-size="16">t-1</text>
+    <text x="400" y="80" text-anchor="middle" font-family="Arial" font-size="16">t</text>
+    <text x="700" y="80" text-anchor="middle" font-family="Arial" font-size="16">t+1</text>
+    
+    <!-- Left cell -->
+    <!-- Hidden state circle -->
+    <circle cx="100" cy="200" r="40" fill="#f0f0f0" stroke="#666666" stroke-width="2"/>
+    <text x="100" y="205" text-anchor="middle" font-family="Arial" font-size="14">h(t-1)</text>
+    
+    <!-- Middle cell -->
+    <!-- Input -->
+    <rect x="350" y="280" width="100" height="40" fill="#e6f3ff" stroke="#666666" stroke-width="2" rx="5"/>
+    <text x="400" y="305" text-anchor="middle" font-family="Arial" font-size="14">x(t)</text>
+    
+    <!-- Hidden state -->
+    <circle cx="400" cy="200" r="40" fill="#f0f0f0" stroke="#666666" stroke-width="2"/>
+    <text x="400" y="205" text-anchor="middle" font-family="Arial" font-size="14">h(t)</text>
+    
+    <!-- Output -->
+    <rect x="350" y="120" width="100" height="40" fill="#e6ffe6" stroke="#666666" stroke-width="2" rx="5"/>
+    <text x="400" y="145" text-anchor="middle" font-family="Arial" font-size="14">y(t)</text>
+    
+    <!-- Right cell -->
+    <!-- Hidden state circle -->
+    <circle cx="700" cy="200" r="40" fill="#f0f0f0" stroke="#666666" stroke-width="2"/>
+    <text x="700" y="205" text-anchor="middle" font-family="Arial" font-size="14">h(t+1)</text>
+    
+    <!-- Connections -->
+    <!-- Horizontal connections between hidden states -->
+    <path d="M 140 200 L 360 200" fill="none" stroke="#666666" stroke-width="2" marker-end="url(#arrowhead)"/>
+    <path d="M 440 200 L 660 200" fill="none" stroke="#666666" stroke-width="2" marker-end="url(#arrowhead)"/>
+    
+    <!-- Vertical connections -->
+    <path d="M 400 280 L 400 240" fill="none" stroke="#666666" stroke-width="2" marker-end="url(#arrowhead)"/>
+    <path d="M 400 160 L 400 120" fill="none" stroke="#666666" stroke-width="2" marker-end="url(#arrowhead)"/>
+    
+    <!-- Recursive connection -->
+    <path d="M 420 170 C 450 170, 450 230, 420 230" fill="none" stroke="#666666" stroke-width="2" marker-end="url(#arrowhead)"/>
+    
+    <!-- Arrowhead definition -->
+    <defs>
+        <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="#666666"/>
+        </marker>
+    </defs>
+    
+    <!-- Legend -->
+    <rect x="50" y="340" width="15" height="15" fill="#e6f3ff" stroke="#666666"/>
+    <text x="75" y="352" font-family="Arial" font-size="12">Input</text>
+    
+    <rect x="150" y="340" width="15" height="15" fill="#f0f0f0" stroke="#666666"/>
+    <text x="175" y="352" font-family="Arial" font-size="12">Hidden State</text>
+    
+    <rect x="250" y="340" width="15" height="15" fill="#e6ffe6" stroke="#666666"/>
+    <text x="275" y="352" font-family="Arial" font-size="12">Output</text>
+</svg>
