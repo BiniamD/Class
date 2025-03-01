@@ -10,3 +10,6 @@ Note
 *.mp4*
 *.tmp*
 readme.html
+
+# remove sec_filings_pdf folder
+sec_filings_pdf/
