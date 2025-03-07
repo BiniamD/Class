@@ -1,0 +1,4 @@
+total_companies: 503
+total_observations: 622597
+date_range: 2020-01-28 to 2025-01-26
+file_location: stock_data\sp500_master_data.csv

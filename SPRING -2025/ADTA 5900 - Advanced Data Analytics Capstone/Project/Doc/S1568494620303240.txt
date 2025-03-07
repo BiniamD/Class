@@ -1,0 +1,11 @@
+Ahmet Murat Ozbayoglu, Mehmet Ugur Gudelek, Omer Berat Sezer,
+Deep learning for financial applications : A survey,
+Applied Soft Computing,
+Volume 93,
+2020,
+106384,
+ISSN 1568-4946,
+https://doi.org/10.1016/j.asoc.2020.106384.
+(https://www.sciencedirect.com/science/article/pii/S1568494620303240)
+Abstract: Computational intelligence in finance has been a very popular topic for both academia and financial industry in the last few decades. Numerous studies have been published resulting in various models. Meanwhile, within the Machine Learning (ML) field, Deep Learning (DL) started getting a lot of attention recently, mostly due to its outperformance over the classical models. Lots of different implementations of DL exist today, and the broad interest is continuing. Finance is one particular area where DL models started getting traction, however, the playfield is wide open, a lot of research opportunities still exist. In this paper, we tried to provide a state-of-the-art snapshot of the developed DL models for financial applications. We not only categorized the works according to their intended subfield in finance but also analyzed them based on their DL models. In addition, we also aimed at identifying possible future implementations and highlighted the pathway for the ongoing research within the field.
+Keywords: Deep learning; Finance; Computational intelligence; Machine learning; Financial applications; Algorithmic trading; Portfolio management; Risk assessment; Fraud detection
