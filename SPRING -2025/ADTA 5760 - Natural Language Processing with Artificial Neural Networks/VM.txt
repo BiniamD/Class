@@ -1,0 +1,48 @@
+
+export IMAGE_FAMILY="tf-ent-latest-cpu"
+export ZONE="us-south1-c"
+export DISK_TYPE="pd-standard"
+export INSTANCE_NAME="deep-learning-vm-tf2"
+export INSTANCE_TYPE="e2-standard-8"
+gcloud compute instances create $INSTANCE_NAME \
+--zone=$ZONE \
+--image-family=$IMAGE_FAMILY \
+--image-project=deeplearning-platform-release \
+--machine-type=$INSTANCE_TYPE \
+--boot-disk-type=$DISK_TYPE \
+--boot-disk-size=1024GB
+
+
+ssh
+jupyter lab --ip=0.0.0.0 --port=8081 --no-browser --allow-root
+
+google SDK
+gcloud compute ssh deep-learning-vm-tf2 --zone=us-south1-c -- -L 8081:localhost:8081
+
+
+Email
+
+service-acc-dl-tf-cnn@adta5760nlp.iam.gserviceaccount.com
+
+
+Stop the VM:
+
+gcloud compute instances stop deep-learning-vm-tf2 --zone=us-south1-c
+Update the VM with the necessary scopes:
+gcloud compute instances set-service-account deep-learning-vm-tf2 \
+    --zone=us-south1-c \
+    --service-account=service-acc-dl-tf-cnn@adta5760nlp.iam.gserviceaccount.com \
+    --scopes=https://www.googleapis.com/auth/cloud-platform
+
+Start the VM:
+
+gcloud compute instances start deep-learning-vm-tf2 --zone=us-south1-c
+
+Retry the command to create the service account key:
+gcloud iam service-accounts keys create ~/key.json --iam-account service-acc-dl-tf-cnn@adta5760nlp.iam.gserviceaccount.com
+
+
+chmod 600 ~/key.json
+export GOOGLE_APPLICATION_CREDENTIALS="/home/biniamabebe/key.json"
+gsutil ls
+GOOGLE_APPLICATION_CREDENTIALS
