@@ -1,20 +1,21 @@
 import yfinance as yf
+from yahoo_fin import stock_info as si
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 import os
 from sklearn.preprocessing import StandardScaler
+import requests
 
 class SP500DataCollector:
     def __init__(self):
         self.sp500_tickers = self._get_sp500_tickers()
+        self.ALPHA_VANTAGE_API_KEY = "Y2JWGYRKAVKGXSHI"
         
     def _get_sp500_tickers(self) -> list:
-        """Get S&P 500 tickers using Wikipedia"""
-        url = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        tables = pd.read_html(url)
-        df = tables[0]
-        return df['Symbol'].tolist()
+        tickers = si.tickers_sp500()
+        tickers = [item.replace(".", "-") for item in tickers] # Yahoo Finance uses dashes instead of dots
+        return tickers
     
     def fetch_and_store_data(self, start_date: str, end_date: str, output_dir: str = 'stock_data'):
         """Fetch data for all S&P 500 companies and store in CSV files"""
@@ -24,7 +25,7 @@ class SP500DataCollector:
         master_df = pd.DataFrame()
         failed_tickers = []
         
-        for ticker in self.sp500_tickers:
+        for ticker in self.sp500_tickers:  # For testing only
             try:
                 # Fetch data
                 stock = yf.Ticker(ticker)

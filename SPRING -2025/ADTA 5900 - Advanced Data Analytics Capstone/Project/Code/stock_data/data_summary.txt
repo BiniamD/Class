@@ -1,0 +1,21 @@
+
+Dataset Overview:
+  Total Companies: 502
+  Total Observations: 623756
+  Date Range: 2020-03-20 to 2025-03-19
+  Number of Features: 76
+  Failed Tickers: 0
+  Data Points per Company (Avg): 1242.5418326693227
+
+Features Description:
+  Price Indicators: ['Close: Daily closing price', 'Returns: Daily price returns', 'Log_Returns: Natural logarithm of returns', 'Price_Range: Daily high-low range', 'Price_Range_Pct: Price range as percentage of closing price']
+  Moving Averages: ['MA_X: Simple Moving Average (X=5,10,20,50,200 days)', 'EMA_X: Exponential Moving Average (X=5,10,20,50,200 days)', 'Returns_Xd: X-day price returns']
+  Volatility Metrics: ['Volatility_Xd: X-day rolling standard deviation of returns', 'Volume_MA_Xd: X-day volume moving average', 'BB_Width_X: Bollinger Band width for X-day period']
+  Technical Indicators: ['RSI_X: Relative Strength Index (X=9,14,25 days)', 'MACD: Moving Average Convergence Divergence', 'Signal_Line: MACD signal line', 'MACD_Histogram: MACD - Signal Line', 'Momentum_14: 14-day momentum', 'ROC_14: 14-day rate of change', 'MFI_X: Money Flow Index (X=14,28 days)', 'Channel_Width_X: Price channel width (X=20,50 days)']
+  Volume Indicators: ['OBV: On-Balance Volume', 'Volume_Ratio: Volume relative to 20-day average', 'Volume_StdDev: 20-day volume standard deviation']
+  Fundamental Features: ['PE_Ratio: Price to Earnings ratio', 'PB_Ratio: Price to Book ratio', 'Dividend_Yield: Annual dividend yield', 'Profit_Margin: Company profit margin', 'Beta: Stock beta coefficient', 'Enterprise_Value: Company enterprise value', 'Forward_EPS: Forward earnings per share', 'Trailing_EPS: Trailing earnings per share']
+  Market Features: ['Market_Return: S&P 500 daily returns', 'Market_Volatility: S&P 500 20-day volatility', 'Rolling_Beta: 60-day rolling beta coefficient', 'VIX: CBOE Volatility Index', 'VIX_MA_10: 10-day moving average of VIX']
+
+Data Quality:
+  Missing Values (%): 1.7969049807262687
+  Memory Usage (MB): 366.4338073730469
