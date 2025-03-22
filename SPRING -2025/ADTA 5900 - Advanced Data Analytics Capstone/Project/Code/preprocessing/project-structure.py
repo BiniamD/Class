@@ -1,18 +1,31 @@
+# %%
 # Directory structure
-preprocessing/
-├── __init__.py
-├── data_loader.py
-├── feature_engineer.py
-├── data_validator.py
-├── sequence_creator.py
-├── utils.py
-└── main.py
+#preprocessing/
+#── __init__
+#├── data_loader
+#├── feature_engineer
+#├── data_validator
+#├── sequence_creator
+#├── utils
+#└── main
 
-# data_loader.py
+# data_loader.
 import pandas as pd
 import numpy as np
 import logging
 from typing import Dict, Union
+
+# feature_engineer
+from typing import List
+import logging
+import ta
+
+# main.py
+import logging
+from pathlib import Path
+
+
+# %%
 
 class DataLoader:
     def __init__(self):
@@ -60,45 +73,59 @@ class DataLoader:
             self.logger.error(f"Error splitting data: {str(e)}")
             raise
 
-# feature_engineer.py
-import pandas as pd
-import numpy as np
-from typing import List
-import logging
-import ta
+
+# %%
 
 class FeatureEngineer:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         
-    def calculate_features(self, df: pd.DataFrame) -> pd.DataFrame:
+    def calculate_features(self, df: pd.DataFrame,missing_columns) -> pd.DataFrame:
         """Calculate all technical indicators and features"""
         try:
             df = df.copy()
             
-            # Additional Moving Averages
-            df['MA50'] = df.groupby('Symbol')['Close'].transform(
-                lambda x: x.rolling(window=50).mean())
-            df['MA200'] = df.groupby('Symbol')['Close'].transform(
-                lambda x: x.rolling(window=200).mean())
+            # only calculate features for the missing columns 
+            for feature in missing_columns:
+                if feature == 'SMA':
+                    df['SMA'] = ta.trend.sma_indicator(df['Close'], window=20)
+                elif feature == 'EMA':
+                    df['EMA'] = ta.trend.ema_indicator(df['Close'], window=20)
+                elif feature == 'RSI':
+                    df['RSI'] = ta.momentum.rsi(df['Close'], window=14)
+                elif feature == 'MACD':
+                    df['MACD'] = ta.trend.macd_diff(df['Close'], window_slow=26, window_fast=12, window_sign=9)
+                elif feature == 'STOCH':
+                    df['STOCH'] = ta.momentum.stoch(df['High'], df['Low'], df['Close'], window=14)
+                elif feature == 'WILLIAMS':
+                    df['WILLIAMS'] = ta.momentum.wr(df['High'], df['Low'], df['Close'], lbp=14)
+                elif feature == 'CCI':
+                    df['CCI'] = ta.trend.cci(df['High'], df['Low'], df['Close'], window=20)
+                elif feature == 'ATR':
+                    df['ATR'] = ta.volatility.average_true_range(df['High'], df['Low'], df['Close'], window=14)
+                elif feature == 'ADX':
+                    df['ADX'] = ta.trend.adx(df['High'], df['Low'], df['Close'], window=14)
+                elif feature == 'OBV':
+                    df['OBV'] = ta.volume.on_balance_volume(df['Close'], df['Volume'])
+                elif feature == 'AD':
+                    df['AD'] = ta.volume.acc_dist_index(df['High'], df['Low'], df['Close'], df['Volume'])
+                elif feature == 'MA20':
+                    df['MA_20'] = df.groupby('Symbol')['Close'].transform(lambda x: x.rolling(window=20).mean())
+                elif feature == 'MA50':
+                    df['MA_50'] = df.groupby('Symbol')['Close'].transform(lambda x: x.rolling(window=50).mean())
+                elif feature == 'MA200':
+                    df['MA_200'] = df.groupby('Symbol')['Close'].transform(lambda x: x.rolling(window=200).mean())
+                elif feature == 'BB_Width_20':
+                    df['BB_Width_20'] = (df['Upper_Band'] - df['Lower_Band']) / df['MA20']
+                elif feature == 'ROC':
+                    df['ROC_14'] = df.groupby('Symbol')['Close'].transform(lambda x: x.pct_change(periods=14) * 100)
+                elif feature == 'Momentum':
+                    df['Momentum'] = df.groupby('Symbol')['Close'].transform(lambda x: x - x.shift(10))  
+                else:
+                    self.logger.warning(f"Feature {feature} not recognized")              
             
-            # Bollinger Band Width
-            df['BB_Width'] = (df['Upper_Band'] - df['Lower_Band']) / df['MA20']
-            
-            # ATR calculation
-            df['TR'] = df.groupby('Symbol').apply(
-                lambda x: ta.volatility.true_range(x['High'], x['Low'], 
-                x['Close'])).reset_index(level=0, drop=True)
-            df['ATR'] = df.groupby('Symbol')['TR'].transform(
-                lambda x: x.rolling(window=14).mean())
-            
-            # ROC (Rate of Change)
-            df['ROC'] = df.groupby('Symbol')['Close'].transform(
-                lambda x: x.pct_change(periods=10) * 100)
-            
-            # Additional Momentum Indicators
-            df['Momentum'] = df.groupby('Symbol')['Close'].transform(
-                lambda x: x - x.shift(10))
+
+
             
             return df
             
@@ -112,7 +139,7 @@ class FeatureEngineer:
             df = df.copy()
             
             # Price normalization
-            price_cols = ['Open', 'High', 'Low', 'Close', 'MA20', 'MA50', 'MA200']
+            price_cols = ['Open', 'High', 'Low', 'Close', 'MA_20', 'MA_50', 'MA_200']
             for col in price_cols:
                 df[col] = df.groupby('Symbol')[col].transform(
                     lambda x: (x - x.min()) / (x.max() - x.min()))
@@ -126,6 +153,8 @@ class FeatureEngineer:
             self.logger.error(f"Error normalizing features: {str(e)}")
             raise
 
+
+# %%
 # sequence_creator.py
 class SequenceCreator:
     def __init__(self, sequence_length: int = 20):
@@ -133,7 +162,7 @@ class SequenceCreator:
         self.logger = logging.getLogger(__name__)
         
     def create_sequences(self, df: pd.DataFrame, 
-                        feature_columns: List[str]) -> Tuple[np.ndarray, np.ndarray]:
+                        feature_columns: List[str]) -> tuple[np.ndarray, np.ndarray]:
         """Create sequences for deep learning model"""
         try:
             sequences = []
@@ -157,15 +186,8 @@ class SequenceCreator:
             self.logger.error(f"Error creating sequences: {str(e)}")
             raise
 
-# main.py
-import logging
-from pathlib import Path
-from data_loader import DataLoader
-from feature_engineer import FeatureEngineer
-from sequence_creator import SequenceCreator
-import pandas as pd
-import numpy as np
 
+# %%
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -182,11 +204,14 @@ def main():
         
         # Load data
         logger.info("Loading data...")
-        df = data_loader.load_data('sp500_master_data.csv')
+        df = data_loader.load_data('../stock_data/sp500_master_data.csv')
         
         # Calculate features
         logger.info("Calculating features...")
-        df = feature_engineer.calculate_features(df)
+        required_columns=['Close', 'Returns', 'RSI_14', 'MACD', 'MA_20',  'BB_Width_20', 'ATR', 'ROC_14', 'Volume'] 
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        
+        df = feature_engineer.calculate_features(df,missing_columns)
         
         # Split data
         logger.info("Splitting data...")
@@ -203,8 +228,7 @@ def main():
             # Create sequences
             X, y = sequence_creator.create_sequences(
                 split_data,
-                feature_columns=['Close', 'Returns', 'RSI', 'MACD', 'MA20', 
-                               'BB_Width', 'ATR', 'ROC', 'Volume']
+                feature_columns=required_columns
             )
             
             sequences[split_name] = {
@@ -231,3 +255,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+
