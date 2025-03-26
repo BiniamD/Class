@@ -284,7 +284,6 @@ def split_data(X, y, train_ratio=0.7, val_ratio=0.15):
     X_train, X_val, X_test = X[:train_size], X[train_size:train_size + val_size], X[train_size + val_size:]
     y_train, y_val, y_test = y[:train_size], y[train_size:train_size + val_size], y[train_size + val_size:]
     return X_train, X_val, X_test, y_train, y_val, y_test, train_size, val_size
-
 # Function to evaluate and visualize model performance
 def evaluate_and_visualize_model(y_test_labels, y_pred, history, symbol, symbol_dir):
     """
@@ -560,27 +559,14 @@ def run_trading_system(file_path, symbol='AAPL', seq_length=30, confidence_thres
     # Split data into train, validation, and test sets
     X_train, X_val, X_test, y_train, y_val, y_test, train_size, val_size = split_data(X, y)
     
-    # Reshape X_train for SMOTE (from 3D to 2D)
-    num_samples, seq_len, num_features = X_train.shape
-    X_train_reshaped = X_train.reshape(num_samples, seq_len * num_features)
-
-    # Apply SMOTE to balance the training data
-    smote = SMOTE(random_state=42)
-    X_train_resampled, y_train_resampled = smote.fit_resample(X_train_reshaped, y_train)
-    
-    # Reshape X_train_resampled back to 3D
-    new_num_samples = X_train_resampled.shape[0]
-    X_train_resampled = X_train_resampled.reshape(new_num_samples, seq_length, num_features)
-
     # Build the CNN-BiLSTM model
-    #num_features = X.shape[2]
+    num_features = X.shape[2]
     model = build_cnn_bilstm_model(seq_length, num_features)
     #model = build_improved_cnn_bilstm_model(seq_length, num_features)
     
-    # Build and train the model with resampled data
-    model = build_cnn_bilstm_model(seq_length, num_features)
+    # Train the model
     history = model.fit(
-        X_train_resampled, y_train_resampled,
+        X_train, y_train,
         validation_data=(X_val, y_val),
         epochs=50,
         batch_size=32,
@@ -636,7 +622,7 @@ def run_trading_system(file_path, symbol='AAPL', seq_length=30, confidence_thres
 top_20_symbols = ['AAPL', 'NVDA', 'MSFT', 'AMZN', 'META', 'GOOGL', 'AVGO', 'TSLA',
                   'BRK.B', 'GOOG', 'JPM', 'LLY', 'V', 'COST', 'MA', 'UNH',
                   'NFLX', 'WMT', 'PG', 'JNJ', 'HD', 'ABBV', 'BAC', 'CRM']
-#top_20_symbols = ['NVDA']
+top_20_symbols = ['MMM']
 # Example usage
 results_dir = 'results'
 os.makedirs(results_dir, exist_ok=True)
@@ -663,7 +649,7 @@ import json
 top_20_symbols = ['AAPL', 'NVDA', 'MSFT', 'META', 'GOOGL', 'AVGO', 
                    'GOOG', 'JPM', 'LLY', 'V', 'COST', 'MA', 'UNH',
                    'WMT', 'PG', 'JNJ', 'HD', 'ABBV', 'BAC', 'CRM','MMM']
-#top_20_symbols = ['T']
+#top_20_symbols = ['MMM']
 # load the data with symbol as the frist column in dataframe from the results folder
 def load_data(symbol):
     symbol_dir = f'results/{symbol}'
