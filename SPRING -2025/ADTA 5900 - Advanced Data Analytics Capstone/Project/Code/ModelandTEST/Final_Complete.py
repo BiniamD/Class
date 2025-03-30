@@ -284,6 +284,7 @@ def split_data(X, y, train_ratio=0.7, val_ratio=0.15):
     X_train, X_val, X_test = X[:train_size], X[train_size:train_size + val_size], X[train_size + val_size:]
     y_train, y_val, y_test = y[:train_size], y[train_size:train_size + val_size], y[train_size + val_size:]
     return X_train, X_val, X_test, y_train, y_val, y_test, train_size, val_size
+
 # Function to evaluate and visualize model performance
 def evaluate_and_visualize_model(y_test_labels, y_pred, history, symbol, symbol_dir):
     """
@@ -559,14 +560,27 @@ def run_trading_system(file_path, symbol='AAPL', seq_length=30, confidence_thres
     # Split data into train, validation, and test sets
     X_train, X_val, X_test, y_train, y_val, y_test, train_size, val_size = split_data(X, y)
     
+    # Reshape X_train for SMOTE (from 3D to 2D)
+    num_samples, seq_len, num_features = X_train.shape
+    X_train_reshaped = X_train.reshape(num_samples, seq_len * num_features)
+
+    # Apply SMOTE to balance the training data
+    smote = SMOTE(random_state=42)
+    X_train_resampled, y_train_resampled = smote.fit_resample(X_train_reshaped, y_train)
+    
+    # Reshape X_train_resampled back to 3D
+    new_num_samples = X_train_resampled.shape[0]
+    X_train_resampled = X_train_resampled.reshape(new_num_samples, seq_length, num_features)
+
     # Build the CNN-BiLSTM model
-    num_features = X.shape[2]
+    #num_features = X.shape[2]
     model = build_cnn_bilstm_model(seq_length, num_features)
     #model = build_improved_cnn_bilstm_model(seq_length, num_features)
     
-    # Train the model
+    # Build and train the model with resampled data
+    model = build_cnn_bilstm_model(seq_length, num_features)
     history = model.fit(
-        X_train, y_train,
+        X_train_resampled, y_train_resampled,
         validation_data=(X_val, y_val),
         epochs=50,
         batch_size=32,
@@ -622,7 +636,7 @@ def run_trading_system(file_path, symbol='AAPL', seq_length=30, confidence_thres
 top_20_symbols = ['AAPL', 'NVDA', 'MSFT', 'AMZN', 'META', 'GOOGL', 'AVGO', 'TSLA',
                   'BRK.B', 'GOOG', 'JPM', 'LLY', 'V', 'COST', 'MA', 'UNH',
                   'NFLX', 'WMT', 'PG', 'JNJ', 'HD', 'ABBV', 'BAC', 'CRM']
-top_20_symbols = ['MMM']
+#top_20_symbols = ['NVDA']
 # Example usage
 results_dir = 'results'
 os.makedirs(results_dir, exist_ok=True)
@@ -648,8 +662,8 @@ import json
 # List of top 20 stock symbols
 top_20_symbols = ['AAPL', 'NVDA', 'MSFT', 'META', 'GOOGL', 'AVGO', 
                    'GOOG', 'JPM', 'LLY', 'V', 'COST', 'MA', 'UNH',
-                   'WMT', 'PG', 'JNJ', 'HD', 'ABBV', 'BAC', 'CRM','MMM']
-#top_20_symbols = ['MMM']
+                   'WMT', 'PG', 'JNJ', 'HD', 'ABBV', 'BAC', 'CRM','MMM','T']
+#top_20_symbols = ['T']
 # load the data with symbol as the frist column in dataframe from the results folder
 def load_data(symbol):
     symbol_dir = f'results/{symbol}'
@@ -722,6 +736,31 @@ df_signals = pd.DataFrame(combined_signals)
 df_signals.to_csv('signals.csv', index=False)
 #print("\nAll trades with Symbol column:")
 #print(df_signals)
+
+# %%
+# pick only win trades
+df_metrics_win = df_metrics[df_metrics['Win Rate'] > 0.5]
+df_metrics_win = df_metrics_win.sort_values('Total Return', ascending=False)
+
+# pick only win trades
+
+# what is overall performance of the trading system
+# Calculate overall performance metrics
+total_return = df_metrics_win['Total Return'].mean()
+annual_return = df_metrics_win['Annual Return'].mean()
+sharpe_ratio = df_metrics_win['Sharpe Ratio'].mean()
+max_drawdown = df_metrics_win['Max Drawdown'].max()
+win_rate = df_metrics_win['Win Rate'].mean()
+profit_factor = df_metrics_win['Profit Factor'].mean()
+
+# Print overall performance metrics
+print("\nOverall Performance Metrics:")
+print(f"Total Return: {total_return:.2%}")
+print(f"Annual Return: {annual_return:.2%}")
+print(f"Sharpe Ratio: {sharpe_ratio:.2f}")
+print(f"Max Drawdown: {max_drawdown:.2%}")
+print(f"Win Rate: {win_rate:.2%}")
+print(f"Profit Factor: {profit_factor:.2f}")
 
 # %%
 # what is overall performance of the trading system

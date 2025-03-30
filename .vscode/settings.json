@@ -1,4 +1,5 @@
 {
     "CodeGPT.apiKey": "CodeGPT Plus Beta",
-    "r.lsp.promptToInstall": false
+    "r.lsp.promptToInstall": false,
+    "python.analysis.autoImportCompletions": true
 }
