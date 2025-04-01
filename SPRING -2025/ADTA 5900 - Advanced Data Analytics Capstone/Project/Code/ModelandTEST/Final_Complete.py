@@ -146,40 +146,6 @@ def load_and_preprocess_data(file_path, symbol, seq_length):
     
     return X, y, features, df
 
-# Function to build the CNN-BiLSTM model
-def _build_cnn_bilstm_model(seq_length, num_features, num_classes=1):
-    """
-    Build a CNN-BiLSTM model for time series forecasting in a trading system.
-    
-    Args:
-        seq_length (int): Number of time steps in each input sequence.
-        num_features (int): Number of features in the input data.
-        num_classes (int): Number of output classes (default: 1 for binary classification).
-    
-    Returns:
-        Sequential: Compiled Keras model.
-    """
-    model = Sequential()
-    # CNN layers for feature extraction
-    model.add(Conv1D(filters=64, kernel_size=3, activation='relu', input_shape=(seq_length, num_features)))
-    model.add(MaxPooling1D(pool_size=2))
-    model.add(Dropout(0.2))
-    # BiLSTM layers for temporal dependencies
-    model.add(Bidirectional(LSTM(128, return_sequences=True)))
-    model.add(Dropout(0.2))
-    model.add(Bidirectional(LSTM(32, return_sequences=True)))
-    model.add(Dropout(0.2))
-    model.add(Bidirectional(LSTM(32)))
-    model.add(Dropout(0.2))
-    # Dense layers for prediction
-    model.add(Dense(32, activation='relu'))
-    model.add(Dense(num_classes, activation='sigmoid' if num_classes == 1 else 'softmax'))
-    # Compile model
-    model.compile(optimizer=Adam(learning_rate=0.001),
-                  loss='binary_crossentropy' if num_classes == 1 else 'categorical_crossentropy',
-                  metrics=['accuracy'])
-    return model
-
 def build_cnn_bilstm_model(seq_length, num_features, num_classes=1):
     """
     Build a CNN-BiLSTM model with attention for time series forecasting in a trading system.
@@ -230,41 +196,6 @@ def build_cnn_bilstm_model(seq_length, num_features, num_classes=1):
     
     return model
 
-def _build_improved_cnn_bilstm_model(seq_length, num_features, num_classes=1):
-    # Define input layer
-    inputs = Input(shape=(seq_length, num_features))
-    
-    # CNN layers for multi-scale feature extraction
-    x = Conv1D(filters=64, kernel_size=3, activation='relu')(inputs)
-    x = Conv1D(filters=64, kernel_size=5, activation='relu')(x)  # Added second Conv1D
-    x = MaxPooling1D(pool_size=2)(x)
-    x = Dropout(0.2)(x)
-    
-    # First BiLSTM layer with increased capacity
-    x = Bidirectional(LSTM(256, return_sequences=True))(x)
-    x = Dropout(0.2)(x)
-    
-    # Second BiLSTM layer for attention, with increased capacity
-    sequence = Bidirectional(LSTM(64, return_sequences=True))(x)
-    x = Dropout(0.2)(sequence)
-
-    # Attention mechanism
-    attention_scores = Dense(1)(sequence)
-    attention_weights = Activation('softmax')(attention_scores)
-    attention_output = Lambda(lambda x: tf.reduce_sum(x[0] * x[1], axis=1))([sequence, attention_weights])
-    
-    # Dense layers for prediction
-    x = Dense(32, activation='relu')(attention_output)
-    outputs = Dense(num_classes, activation='sigmoid' if num_classes == 1 else 'softmax')(x)
-    
-    # Create and compile the model
-    model = Model(inputs=inputs, outputs=outputs)
-    model.compile(optimizer=Adam(learning_rate=0.001),
-                  loss='binary_crossentropy' if num_classes == 1 else 'categorical_crossentropy',
-                  metrics=['accuracy'])
-    
-    return model
-# Function to split data into train, validation, and test sets
 def split_data(X, y, train_ratio=0.7, val_ratio=0.15):
     """
     Split the data into training, validation, and test sets.
