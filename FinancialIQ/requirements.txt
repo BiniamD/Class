@@ -1,0 +1,58 @@
+# Core dependencies
+python-dotenv
+pydantic
+typing-extensions
+
+# Google Cloud
+google-cloud-aiplatform
+google-cloud-storage
+google-cloud-api-keys
+google-cloud-logging
+google-cloud-bigquery
+
+# PDF Processing
+PyPDF2==3.0.1
+unstructured
+pdfplumber
+tabula-py
+
+# RAG and LLM
+langchain==0.1.9
+langchain-core
+langchain-community
+langchain-text-splitters
+langchain-google-vertexai
+langchain-google-genai
+faiss-cpu
+sentence-transformers
+
+# Web Interface
+streamlit
+plotly
+pandas
+numpy
+
+# Data Visualization
+matplotlib
+seaborn
+
+# Caching and Logging
+cachetools
+python-json-logger
+
+# Testing
+pytest
+pytest-cov
+pytest-mock
+
+# Development
+black
+isort
+flake8
+mypy
+
+# Utilities
+tqdm
+python-dateutil
+requests
+shapely 

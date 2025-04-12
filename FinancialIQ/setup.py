@@ -1,0 +1,30 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="financialiq",
+    version="0.1.0",
+    packages=find_packages(),
+    install_requires=[
+        "python-dotenv",
+        "pydantic",
+        "typing-extensions",
+        "langchain",
+        "langchain-core",
+        "langchain-community",
+        "langchain-text-splitters",
+        "langchain-google-vertexai",
+        "langchain-google-genai",
+        "google-cloud-aiplatform",
+        "google-cloud-storage",
+        "google-cloud-api-keys",
+        "google-cloud-bigquery",
+        "PyPDF2",
+        "tabula-py",
+        "streamlit",
+        "pandas",
+        "numpy",
+        "python-json-logger",
+        "shapely"
+    ],
+    python_requires=">=3.9",
+) 

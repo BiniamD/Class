@@ -1,0 +1,34 @@
+# Core dependencies
+python-dotenv
+pydantic
+typing-extensions
+
+# Google Cloud
+google-cloud-aiplatform
+google-cloud-storage
+google-cloud-api-keys
+google-cloud-bigquery
+
+# PDF Processing
+PyPDF2
+tabula-py
+
+# RAG and LLM
+langchain
+langchain-core
+langchain-community
+langchain-text-splitters
+langchain-google-vertexai
+langchain-google-genai
+faiss-cpu
+
+# Web Interface
+streamlit
+pandas
+numpy
+
+# Caching and Logging
+python-json-logger
+
+# Utilities
+shapely 
