@@ -1,0 +1,31 @@
+# Core dependencies
+streamlit==1.32.0
+langchain==0.1.12
+langchain-core<0.2.0
+faiss-cpu==1.7.4
+PyPDF2==3.0.1
+pandas==2.2.1
+numpy==1.26.4
+plotly==5.19.0
+
+# Google Cloud dependencies
+google-cloud-storage==2.14.0
+google-cloud-aiplatform==1.42.1
+google-cloud-bigquery==3.1.0
+google-cloud-logging==3.1.0
+google-cloud-pubsub==3.1.0
+google-cloud-secretmanager==3.1.0
+
+# Langchain dependencies
+langchain-google-genai==2.1.2
+langchain-google-vertexai==0.0.6
+langchain-openai==0.0.6
+langchain-anthropic==0.0.6
+langchain-community==0.0.38
+langchain-text-splitters==0.0.2
+
+# Additional utilities
+python-dotenv==1.0.1
+tqdm==4.66.2
+protobuf>=3.13.0,<4.0.0
+pydantic>=2.0.0 

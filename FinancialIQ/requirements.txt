@@ -11,10 +11,12 @@ google-cloud-logging
 google-cloud-bigquery
 
 # PDF Processing
-PyPDF2==3.0.1
+PyPDF2
 unstructured
 pdfplumber
 tabula-py
+JPype1
+camelot-py
 
 # RAG and LLM
 langchain==0.1.9

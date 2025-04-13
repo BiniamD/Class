@@ -417,14 +417,21 @@ class FinancialIQSystem:
         for pdf_path in documents_dir.glob("*.pdf"):
             self.processor.process_document(pdf_path)
 
-    def _create_vector_store(self):
+    def create_vector_store(self):
         """Create vector store from processed documents"""
         documents = []
         for chunk in self.processor.chunks:
-            doc = Document(
-                page_content=chunk.text,
-                metadata=chunk.metadata
-            )
+            # Handle both dictionary and Document inputs
+            if isinstance(chunk, dict):
+                doc = Document(
+                    page_content=chunk.get('text', ''),
+                    metadata=chunk.get('metadata', {})
+                )
+            else:
+                doc = Document(
+                    page_content=chunk.text,
+                    metadata=chunk.metadata
+                )
             documents.append(doc)
         
         self.vector_store = FAISS.from_documents(
@@ -620,4 +627,38 @@ class FinancialIQSystem:
             {"message": f"Retrieving filings from the last {days} days"},
             severity="INFO"
         )
-        return self.metadata_handler.get_recent_filings(days) 
+        return self.metadata_handler.get_recent_filings(days)
+
+    def add_to_vector_store(self, document):
+        """Add a document to the vector store"""
+        try:
+            # Handle both dictionary and Document inputs
+            if isinstance(document, dict):
+                doc = Document(
+                    page_content=document.get('text', ''),
+                    metadata=document.get('metadata', {})
+                )
+            else:
+                doc = document
+            
+            if self.vector_store is None:
+                self.vector_store = FAISS.from_documents([doc], self.embeddings)
+            else:
+                self.vector_store.add_documents([doc])
+            
+            # Save vector store
+            self.vector_store.save_local("vector_store")
+            
+            self.logger.log_struct(
+                {"message": "Document added to vector store"},
+                severity="INFO"
+            )
+        except Exception as e:
+            self.logger.log_struct(
+                {
+                    "message": "Error adding document to vector store",
+                    "error": str(e)
+                },
+                severity="ERROR"
+            )
+            raise 

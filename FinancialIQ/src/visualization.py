@@ -9,6 +9,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime
+import numpy as np
 
 class FinancialVisualizer:
     """Handles visualization of financial data"""
@@ -200,6 +201,177 @@ class FinancialVisualizer:
             yaxis_title="Amount (USD)",
             plot_bgcolor='white',
             paper_bgcolor='white'
+        )
+        
+        return fig
+
+    def extract_revenue_data(self, filings: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Extract revenue data from filings"""
+        try:
+            # Extract relevant columns
+            revenue_data = filings[['filedAt', 'formType', 'companyName']].copy()
+            
+            # Convert filedAt to datetime
+            revenue_data['filedAt'] = pd.to_datetime(revenue_data['filedAt'])
+            
+            # Add placeholder columns for financial data
+            revenue_data['revenue'] = np.nan
+            revenue_data['net_income'] = np.nan
+            revenue_data['eps'] = np.nan
+            
+            # Sort by date
+            revenue_data = revenue_data.sort_values('filedAt')
+            
+            return revenue_data
+        except Exception as e:
+            print(f"Error extracting revenue data: {str(e)}")
+            return None
+
+    def extract_risk_factors(self, filings: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Extract risk factors from filings"""
+        try:
+            # Extract relevant columns
+            risk_data = filings[['filedAt', 'formType', 'companyName']].copy()
+            
+            # Convert filedAt to datetime
+            risk_data['filedAt'] = pd.to_datetime(risk_data['filedAt'])
+            
+            # Add placeholder columns for risk factors
+            risk_data['market_risk'] = np.nan
+            risk_data['operational_risk'] = np.nan
+            risk_data['regulatory_risk'] = np.nan
+            risk_data['financial_risk'] = np.nan
+            
+            # Sort by date
+            risk_data = risk_data.sort_values('filedAt')
+            
+            return risk_data
+        except Exception as e:
+            print(f"Error extracting risk factors: {str(e)}")
+            return None
+
+    def extract_executive_compensation(self, filings: pd.DataFrame) -> Optional[pd.DataFrame]:
+        """Extract executive compensation data from filings"""
+        try:
+            # Extract relevant columns
+            comp_data = filings[['filedAt', 'formType', 'companyName']].copy()
+            
+            # Convert filedAt to datetime
+            comp_data['filedAt'] = pd.to_datetime(comp_data['filedAt'])
+            
+            # Add placeholder columns for executive compensation
+            comp_data['ceo_compensation'] = np.nan
+            comp_data['cfo_compensation'] = np.nan
+            comp_data['other_executives'] = np.nan
+            
+            # Sort by date
+            comp_data = comp_data.sort_values('filedAt')
+            
+            return comp_data
+        except Exception as e:
+            print(f"Error extracting executive compensation: {str(e)}")
+            return None
+
+    def create_revenue_chart(self, data: pd.DataFrame) -> go.Figure:
+        """Create a revenue trends chart"""
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        
+        # Add form type indicators
+        for form_type in data['formType'].unique():
+            form_data = data[data['formType'] == form_type]
+            fig.add_trace(
+                go.Scatter(
+                    x=form_data['filedAt'],
+                    y=[0] * len(form_data),
+                    name=f'{form_type} Filing',
+                    mode='markers',
+                    marker=dict(
+                        symbol='diamond',
+                        size=10,
+                        color=self.color_palette.get(form_type, '#000000')
+                    ),
+                    text=form_data['companyName'],
+                    hoverinfo='text+x'
+                ),
+                secondary_y=False
+            )
+        
+        fig.update_layout(
+            title="Filing Timeline",
+            xaxis_title="Date",
+            yaxis_title="",
+            hovermode='x unified',
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            showlegend=True
+        )
+        
+        return fig
+
+    def create_risk_factors_chart(self, data: pd.DataFrame) -> go.Figure:
+        """Create a risk factors timeline chart"""
+        fig = go.Figure()
+        
+        # Add form type indicators
+        for form_type in data['formType'].unique():
+            form_data = data[data['formType'] == form_type]
+            fig.add_trace(
+                go.Scatter(
+                    x=form_data['filedAt'],
+                    y=[0] * len(form_data),
+                    name=f'{form_type} Filing',
+                    mode='markers',
+                    marker=dict(
+                        symbol='diamond',
+                        size=10,
+                        color=self.color_palette.get(form_type, '#000000')
+                    ),
+                    text=form_data['companyName'],
+                    hoverinfo='text+x'
+                )
+            )
+        
+        fig.update_layout(
+            title="Filing Timeline",
+            xaxis_title="Date",
+            yaxis_title="",
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            showlegend=True
+        )
+        
+        return fig
+
+    def create_compensation_chart(self, data: pd.DataFrame) -> go.Figure:
+        """Create a filing timeline chart"""
+        fig = go.Figure()
+        
+        # Add form type indicators
+        for form_type in data['formType'].unique():
+            form_data = data[data['formType'] == form_type]
+            fig.add_trace(
+                go.Scatter(
+                    x=form_data['filedAt'],
+                    y=[0] * len(form_data),
+                    name=f'{form_type} Filing',
+                    mode='markers',
+                    marker=dict(
+                        symbol='diamond',
+                        size=10,
+                        color=self.color_palette.get(form_type, '#000000')
+                    ),
+                    text=form_data['companyName'],
+                    hoverinfo='text+x'
+                )
+            )
+        
+        fig.update_layout(
+            title="Filing Timeline",
+            xaxis_title="Date",
+            yaxis_title="",
+            plot_bgcolor='white',
+            paper_bgcolor='white',
+            showlegend=True
         )
         
         return fig 
