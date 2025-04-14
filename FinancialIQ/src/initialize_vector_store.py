@@ -58,22 +58,23 @@ def initialize_vector_store(
     Returns:
         bool: True if initialization was successful, False otherwise
     """
+    # Initialize logger first
+    logger = FinancialIQLogger("logs")
+    
     try:
         # Set up GCP credentials
         setup_gcp_credentials()
         
         # Get configuration from environment variables
-        project_id = os.getenv("PROJECT_ID")
-        location = os.getenv("LOCATION")
-        bucket_name = os.getenv("BUCKET_NAME")
+        project_id = os.getenv("GOOGLE_CLOUD_PROJECT")  # Changed from PROJECT_ID
+        location = os.getenv("GOOGLE_CLOUD_LOCATION")   # Changed from LOCATION
+        bucket_name = os.getenv("GCS_BUCKET_NAME")      # Changed from BUCKET_NAME
         pdf_folder = os.getenv("PDF_FOLDER")
         local_dir = os.getenv("LOCAL_DIR")
         
         if not project_id or not location:
-            raise ValueError("PROJECT_ID and LOCATION must be set in .env file")
+            raise ValueError("GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION must be set in .env file")
         
-        # Initialize logger
-        logger = FinancialIQLogger("logs")
         logger.info("Starting vector store initialization")
         
         # Initialize document processor

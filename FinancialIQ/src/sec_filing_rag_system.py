@@ -18,15 +18,14 @@ from langchain_community.vectorstores import FAISS
 from langchain.schema import Document
 from google.cloud import storage
 from google.cloud import aiplatform
-from google.cloud import logging as cloud_logging
 from dotenv import load_dotenv
 from pathlib import Path
 import faiss
 import numpy as np
 from langchain.prompts import PromptTemplate
-from src.sec_filing_metadata import SECFilingMetadata
-from src.cache_manager import CacheManager
-from src.logger import FinancialIQLogger
+from sec_filing_metadata import SECFilingMetadata
+from cache_manager import CacheManager
+from langchain_community.embeddings import HuggingFaceEmbeddings
 
 # Load environment variables
 load_dotenv()
@@ -136,72 +135,56 @@ class SECFilingProcessor:
 class FinancialIQSystem:
     """Main system class for SEC filing analysis"""
     
-    def __init__(
-        self,
-        project_id: str,
-        location: str,
-        bucket_name: Optional[str] = None,
-        pdf_folder: Optional[str] = None,
-        metadata_csv_path: Optional[str] = None
-    ):
+    def __init__(self, project_id: str, location: str, metadata_csv_path: str):
         self.project_id = project_id
         self.location = location
-        self.bucket_name = bucket_name
-        self.pdf_folder = pdf_folder
-        
-        # Initialize processing tracking
-        self.processed_files_path = "processed_files.json"
-        self.processed_files = self._load_processed_files()
-        
-        self.processor = SECFilingProcessor()
-        self.embeddings = None
+        self.metadata_csv_path = metadata_csv_path
         self.vector_store = None
-        self.llm = None
-        self.qa_chain = None
+        self.embeddings = None
+        self.processor = SECFilingProcessor()
         
-        # Initialize GCP clients
-        self.storage_client = storage.Client(project=project_id)
-        aiplatform.init(project=project_id, location=location)
-        
-        # Initialize logging
-        logging_client = cloud_logging.Client(project=project_id)
-        self.logger = logging_client.logger('financialiq-system')
-        self.logger.log_struct(
-            {"message": "FinancialIQSystem initialized"},
-            severity="INFO"
-        )
-        
-        # Initialize metadata handler
-        self.metadata_handler = SECFilingMetadata(metadata_csv_path) if metadata_csv_path else None
-        
-        # Initialize components
-        self._initialize_embeddings()
-        self._initialize_llm()
-    
-    def _load_processed_files(self) -> Dict[str, str]:
-        """Load the record of processed files"""
-        if os.path.exists(self.processed_files_path):
-            with open(self.processed_files_path, 'r') as f:
-                return json.load(f)
-        return {}
-    
-    def _save_processed_files(self) -> None:
-        """Save the record of processed files"""
-        with open(self.processed_files_path, 'w') as f:
-            json.dump(self.processed_files, f)
-    
-    def _get_file_hash(self, file_path: str) -> str:
-        """Generate a hash for a file based on its metadata"""
-        blob = self.storage_client.bucket(self.bucket_name).blob(file_path)
-        return f"{blob.name}_{blob.updated}"
-    
+    def setup_system(self, load_existing: bool = False):
+        """Setup the system with vector store and embeddings"""
+        try:
+            # Initialize embeddings
+            self.embeddings = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-MiniLM-L6-v2",
+                model_kwargs={"device": "cpu"}
+            )
+            
+            # Load or create vector store
+            vector_store_path = "data/vector_store"
+            if load_existing and os.path.exists(vector_store_path):
+                self.vector_store = FAISS.load_local(
+                    vector_store_path,
+                    self.embeddings,
+                    allow_dangerous_deserialization=True  # Allow deserialization since we trust our own data
+                )
+                print("Loaded existing vector store")
+            else:
+                raise ValueError("Vector store not found. Please run initialization script first.")
+                
+            return True
+        except Exception as e:
+            print(f"Error setting up system: {str(e)}")
+            raise
+            
+    def search_documents(self, query: str, k: int = 5):
+        """Search for relevant documents"""
+        if self.vector_store is None:
+            raise ValueError("Vector store not initialized. Please run setup_system first.")
+            
+        try:
+            results = self.vector_store.similarity_search(query, k=k)
+            return results
+        except Exception as e:
+            print(f"Error searching documents: {str(e)}")
+            raise
+
     def process_pdf(self, pdf_path: str) -> Dict[str, Any]:
         """Process a PDF file and return extracted information"""
         try:
-            self.logger.log_struct(
-                {"message": f"Processing PDF: {pdf_path}"},
-                severity="INFO"
-            )
+            print(f"Processing PDF: {pdf_path}")
             
             # Process the PDF using the SECFilingProcessor
             result = self.processor.process_document(pdf_path)
@@ -213,21 +196,12 @@ class FinancialIQSystem:
             return result
             
         except Exception as e:
-            self.logger.log_struct(
-                {
-                    "message": f"Error processing PDF {pdf_path}",
-                    "error": str(e)
-                },
-                severity="ERROR"
-            )
+            print(f"Error processing PDF {pdf_path}: {str(e)}")
             raise
     
     def process_pdfs_from_gcs(self) -> List[Document]:
         """Process PDFs from Google Cloud Storage"""
-        self.logger.log_struct(
-            {"message": f"Processing PDFs from GCS bucket: {self.bucket_name}"},
-            severity="INFO"
-        )
+        print(f"Processing PDFs from GCS bucket: {self.bucket_name}")
         
         bucket = self.storage_client.bucket(self.bucket_name)
         blobs = bucket.list_blobs(prefix=self.pdf_folder)
@@ -239,16 +213,10 @@ class FinancialIQSystem:
                 
                 # Skip if already processed
                 if file_hash in self.processed_files:
-                    self.logger.log_struct(
-                        {"message": f"Skipping already processed PDF: {blob.name}"},
-                        severity="INFO"
-                    )
+                    print(f"Skipping already processed PDF: {blob.name}")
                     continue
                 
-                self.logger.log_struct(
-                    {"message": f"Processing new PDF: {blob.name}"},
-                    severity="INFO"
-                )
+                print(f"Processing new PDF: {blob.name}")
                 # Download PDF to temporary file
                 temp_path = f"/tmp/{os.path.basename(blob.name)}"
                 blob.download_to_filename(temp_path)
@@ -264,27 +232,18 @@ class FinancialIQSystem:
                 # Clean up
                 os.remove(temp_path)
         
-        self.logger.log_struct(
-            {"message": f"Processed {len(documents)} new document chunks"},
-            severity="INFO"
-        )
+        print(f"Processed {len(documents)} new document chunks")
         return documents
     
     def process_pdf_from_gcs(self, pdf_path: str) -> Dict[str, Any]:
         """Process a single PDF file from Google Cloud Storage"""
-        self.logger.log_struct(
-            {"message": f"Processing PDF from GCS: {pdf_path}"},
-            severity="INFO"
-        )
+        print(f"Processing PDF from GCS: {pdf_path}")
         
         file_hash = self._get_file_hash(pdf_path)
         
         # Skip if already processed
         if file_hash in self.processed_files:
-            self.logger.log_struct(
-                {"message": f"Skipping already processed PDF: {pdf_path}"},
-                severity="INFO"
-            )
+            print(f"Skipping already processed PDF: {pdf_path}")
             return None
         
         # Download PDF to temporary location
@@ -302,18 +261,12 @@ class FinancialIQSystem:
         # Clean up temporary file
         os.remove(temp_path)
         
-        self.logger.log_struct(
-            {"message": f"PDF processing completed: {pdf_path}"},
-            severity="INFO"
-        )
+        print(f"PDF processing completed: {pdf_path}")
         return result
     
     def setup_vector_store(self, pdf_paths: List[str]) -> None:
         """Set up vector store with processed documents"""
-        self.logger.log_struct(
-            {"message": f"Setting up vector store with {len(pdf_paths)} PDFs"},
-            severity="INFO"
-        )
+        print(f"Setting up vector store with {len(pdf_paths)} PDFs")
         
         documents = []
         for pdf_path in pdf_paths:
@@ -322,10 +275,7 @@ class FinancialIQSystem:
                 documents.append(result)
         
         if not documents:
-            self.logger.log_struct(
-                {"message": "No new documents to process"},
-                severity="INFO"
-            )
+            print("No new documents to process")
             return
         
         # Split documents into chunks
@@ -355,93 +305,8 @@ class FinancialIQSystem:
             verbose=True
         )
         
-        self.logger.log_struct(
-            {"message": "Vector store setup completed"},
-            severity="INFO"
-        )
+        print("Vector store setup completed")
     
-    def setup_system(self, load_existing: bool = False):
-        """Set up the RAG system"""
-        if load_existing and self._load_existing_vector_store():
-            print("Loaded existing vector store")
-        else:
-            self._process_documents()
-            self._create_vector_store()
-        
-        self._setup_qa_chain()
-    
-    def _load_existing_vector_store(self) -> bool:
-        """Load existing vector store if available"""
-        vector_store_path = Path("vector_store")
-        if vector_store_path.exists():
-            try:
-                self.vector_store = FAISS.load_local(
-                    str(vector_store_path),
-                    self.embeddings
-                )
-                return True
-            except Exception as e:
-                print(f"Error loading vector store: {e}")
-        return False
-
-    def _process_documents(self):
-        """Process documents and create embeddings"""
-        if self.bucket_name and self.pdf_folder:
-            self._process_cloud_documents()
-        else:
-            self._process_local_documents()
-
-    def _process_cloud_documents(self):
-        """Process documents from Google Cloud Storage"""
-        from google.cloud import storage
-        
-        client = storage.Client(project=self.project_id)
-        bucket = client.bucket(self.bucket_name)
-        
-        for blob in bucket.list_blobs(prefix=self.pdf_folder):
-            if blob.name.endswith('.pdf'):
-                # Download PDF
-                local_path = Path("temp") / Path(blob.name).name
-                local_path.parent.mkdir(exist_ok=True)
-                blob.download_to_filename(str(local_path))
-                
-                # Process PDF
-                self.processor.process_document(local_path)
-                
-                # Clean up
-                local_path.unlink()
-
-    def _process_local_documents(self):
-        """Process documents from local directory"""
-        documents_dir = Path("documents")
-        for pdf_path in documents_dir.glob("*.pdf"):
-            self.processor.process_document(pdf_path)
-
-    def create_vector_store(self):
-        """Create vector store from processed documents"""
-        documents = []
-        for chunk in self.processor.chunks:
-            # Handle both dictionary and Document inputs
-            if isinstance(chunk, dict):
-                doc = Document(
-                    page_content=chunk.get('text', ''),
-                    metadata=chunk.get('metadata', {})
-                )
-            else:
-                doc = Document(
-                    page_content=chunk.text,
-                    metadata=chunk.metadata
-                )
-            documents.append(doc)
-        
-        self.vector_store = FAISS.from_documents(
-            documents,
-            self.embeddings
-        )
-        
-        # Save vector store
-        self.vector_store.save_local("vector_store")
-
     def _setup_qa_chain(self):
         """Set up the question-answering chain"""
         prompt_template = """
@@ -559,17 +424,11 @@ class FinancialIQSystem:
 
     def process_query(self, query: str, chat_history: List[tuple] = None) -> Dict[str, Any]:
         """Process a user query and return response with sources"""
-        self.logger.log_struct(
-            {"message": f"Processing query: {query}"},
-            severity="INFO"
-        )
+        print(f"Processing query: {query}")
         
         if not self.qa_chain:
             error_msg = "Vector store not initialized. Call setup_vector_store first."
-            self.logger.log_struct(
-                {"message": error_msg},
-                severity="ERROR"
-            )
+            print(f"Error: {error_msg}")
             raise ValueError(error_msg)
         
         if chat_history is None:
@@ -587,10 +446,7 @@ class FinancialIQSystem:
                 if metadata:
                     source_metadata.append(metadata)
         
-        self.logger.log_struct(
-            {"message": f"Query processed with {len(source_metadata)} sources"},
-            severity="INFO"
-        )
+        print(f"Query processed with {len(source_metadata)} sources")
         
         return {
             'answer': result['answer'],
@@ -599,34 +455,22 @@ class FinancialIQSystem:
     
     def get_metadata_statistics(self) -> Dict[str, Any]:
         """Get statistics about the available filings"""
-        self.logger.log_struct(
-            {"message": "Retrieving metadata statistics"},
-            severity="INFO"
-        )
+        print("Retrieving metadata statistics")
         return self.metadata_handler.get_filing_statistics()
     
     def get_companies(self) -> List[str]:
         """Get list of available companies"""
-        self.logger.log_struct(
-            {"message": "Retrieving list of companies"},
-            severity="INFO"
-        )
+        print("Retrieving list of companies")
         return self.metadata_handler.get_companies()
     
     def get_form_types(self) -> List[str]:
         """Get list of available form types"""
-        self.logger.log_struct(
-            {"message": "Retrieving list of form types"},
-            severity="INFO"
-        )
+        print("Retrieving list of form types")
         return self.metadata_handler.get_form_types()
     
     def get_recent_filings(self, days: int = 30) -> pd.DataFrame:
         """Get recent filings"""
-        self.logger.log_struct(
-            {"message": f"Retrieving filings from the last {days} days"},
-            severity="INFO"
-        )
+        print(f"Retrieving filings from the last {days} days")
         return self.metadata_handler.get_recent_filings(days)
 
     def add_to_vector_store(self, document):
@@ -649,16 +493,7 @@ class FinancialIQSystem:
             # Save vector store
             self.vector_store.save_local("vector_store")
             
-            self.logger.log_struct(
-                {"message": "Document added to vector store"},
-                severity="INFO"
-            )
+            print("Document added to vector store")
         except Exception as e:
-            self.logger.log_struct(
-                {
-                    "message": "Error adding document to vector store",
-                    "error": str(e)
-                },
-                severity="ERROR"
-            )
+            print(f"Error adding document to vector store: {str(e)}")
             raise 

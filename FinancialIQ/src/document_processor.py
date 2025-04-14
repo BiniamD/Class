@@ -21,6 +21,7 @@ from google.api_core.exceptions import GoogleAPIError
 from google.cloud import storage
 import tempfile
 import time
+import traceback
 
 class EnhancedSECFilingProcessor:
     """Enhanced processor for SEC filings with improved table and structured data extraction"""
@@ -45,6 +46,10 @@ class EnhancedSECFilingProcessor:
         self.max_context_length = 4096  # Default context length
         self.chunk_overlap = 200  # Overlap between chunks
         self.min_chunk_size = 500  # Minimum chunk size
+        
+        # Processing settings
+        self.processing_timeout = 600  # 10-minute timeout
+        self.chunk_timeout = 60  # 1-minute timeout per chunk
         
         self.form_types = {
             "10-K": "Annual Report",
@@ -196,10 +201,61 @@ class EnhancedSECFilingProcessor:
             self.logger.log_error(e, "metadata_cache_retrieval", {"blob_name": blob_name})
             return None
 
+    def _chunk_text(self, text: str, max_chunk_size: int = 1000, overlap: int = 200) -> List[Dict[str, Any]]:
+        """Split text into chunks suitable for vector embeddings"""
+        chunks = []
+        current_chunk = []
+        current_size = 0
+        
+        # Split text into paragraphs
+        paragraphs = text.split('\n\n')
+        
+        for paragraph in paragraphs:
+            paragraph = paragraph.strip()
+            if not paragraph:
+                continue
+            
+            # If paragraph is too long, split it into sentences
+            if len(paragraph) > max_chunk_size:
+                sentences = re.split(r'(?<=[.!?])\s+', paragraph)
+                for sentence in sentences:
+                    if current_size + len(sentence) > max_chunk_size:
+                        if current_chunk:
+                            chunks.append({
+                                "text": ' '.join(current_chunk),
+                                "size": current_size
+                            })
+                            # Keep last overlap words for context
+                            current_chunk = current_chunk[-overlap:] if overlap > 0 else []
+                            current_size = sum(len(word) for word in current_chunk)
+                    current_chunk.append(sentence)
+                    current_size += len(sentence)
+            else:
+                if current_size + len(paragraph) > max_chunk_size:
+                    if current_chunk:
+                        chunks.append({
+                            "text": ' '.join(current_chunk),
+                            "size": current_size
+                        })
+                        # Keep last overlap words for context
+                        current_chunk = current_chunk[-overlap:] if overlap > 0 else []
+                        current_size = sum(len(word) for word in current_chunk)
+                current_chunk.append(paragraph)
+                current_size += len(paragraph)
+        
+        # Add remaining content as a chunk
+        if current_chunk:
+            chunks.append({
+                "text": ' '.join(current_chunk),
+                "size": current_size
+            })
+        
+        return chunks
+
     def process_gcs_pdf(self, blob_name: str) -> Dict[str, Any]:
-        """Process a single PDF file from GCS with detailed logging"""
+        """Process a single PDF file from GCS with text extraction for vector search"""
         try:
-            self.logger.info(f"Starting end-to-end processing of file: {blob_name}")
+            self.logger.info(f"Starting text extraction for vector search: {blob_name}")
             
             # Step 1: Check cache
             self.logger.info("Step 1: Checking cache")
@@ -211,86 +267,129 @@ class EnhancedSECFilingProcessor:
             # Step 2: Download and validate PDF
             self.logger.info("Step 2: Downloading and validating PDF")
             pdf_content = b""
-            for chunk in self.get_blob_content(blob_name):
-                pdf_content += chunk
+            try:
+                for chunk in self.get_blob_content(blob_name):
+                    pdf_content += chunk
+                self.logger.info(f"Successfully downloaded {len(pdf_content)} bytes")
+            except Exception as e:
+                self.logger.error(f"Failed to download PDF: {str(e)}\n{traceback.format_exc()}")
+                return {}
             
             if not self.validate_pdf_content(pdf_content):
                 self.logger.error(f"Invalid PDF content for {blob_name}")
                 return {}
             
-            # Step 3: Process PDF content
-            self.logger.info("Step 3: Processing PDF content")
-            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(self.process_pdf_content, pdf_content, blob_name)
-                try:
-                    result = future.result(timeout=300)  # 5-minute timeout
-                except concurrent.futures.TimeoutError:
-                    self.logger.error(f"Timeout processing PDF: {blob_name}")
+            # Step 3: Extract and chunk text content
+            self.logger.info("Step 3: Extracting and chunking text content")
+            try:
+                # Create PDF reader
+                pdf_file = BytesIO(pdf_content)
+                reader = PdfReader(pdf_file)
+                total_pages = len(reader.pages)
+                self.logger.info(f"PDF has {total_pages} pages")
+                
+                # Extract and chunk text from all pages
+                text_chunks = []
+                for i, page in enumerate(reader.pages):
+                    try:
+                        text = page.extract_text()
+                        if text:
+                            # Chunk the page text
+                            page_chunks = self._chunk_text(text)
+                            for chunk in page_chunks:
+                                text_chunks.append({
+                                    "page": i + 1,
+                                    "chunk": chunk["text"],
+                                    "size": chunk["size"],
+                                    "metadata": self.extract_metadata_from_text(text, f"{blob_name}_page_{i + 1}")
+                                })
+                            self.logger.info(f"Extracted and chunked text from page {i + 1} into {len(page_chunks)} chunks")
+                    except Exception as e:
+                        self.logger.error(f"Error extracting text from page {i + 1}: {str(e)}\n{traceback.format_exc()}")
+                        continue
+                
+                if not text_chunks:
+                    self.logger.error(f"No text content extracted from {blob_name}")
                     return {}
-            
-            if not result:
-                self.logger.error(f"No result generated for {blob_name}")
+                
+                # Prepare result for vector storage
+                result = {
+                    "source": blob_name,
+                    "total_pages": total_pages,
+                    "total_chunks": len(text_chunks),
+                    "chunks": text_chunks,
+                    "metadata": self.extract_metadata_from_text(
+                        "\n".join(chunk["chunk"] for chunk in text_chunks),
+                        blob_name
+                    )
+                }
+                
+            except Exception as e:
+                self.logger.error(f"Error processing PDF content: {str(e)}\n{traceback.format_exc()}")
                 return {}
             
-            # Step 4: Validate result structure
-            self.logger.info("Step 4: Validating result structure")
-            if "data" not in result or "vector_content" not in result:
-                self.logger.error(f"Invalid result structure for {blob_name}")
-                return {}
-            
-            # Step 5: Store results
-            self.logger.info("Step 5: Storing results")
+            # Step 4: Store results
+            self.logger.info("Step 4: Storing results")
             try:
                 # Store processed data
                 result_blob = self.bucket.blob(f"processed/{blob_name}.json")
                 result_blob.upload_from_string(
-                    json.dumps(result["data"]),
+                    json.dumps(result),
                     content_type="application/json"
                 )
                 self.logger.info(f"Stored processed data for {blob_name}")
                 
-                # Store vector content
-                vector_blob = self.bucket.blob(f"vector_store/{blob_name}.txt")
-                vector_blob.upload_from_string(
-                    result["vector_content"],
-                    content_type="text/plain"
-                )
-                self.logger.info(f"Stored vector content for {blob_name}")
-                
                 # Cache metadata
                 cache_blob = self.bucket.blob(f"cache/metadata/{blob_name}.json")
                 cache_blob.upload_from_string(
-                    json.dumps(result["data"]),
+                    json.dumps(result),
                     content_type="application/json"
                 )
                 self.logger.info(f"Cached metadata for {blob_name}")
                 
+                return result
+                
             except Exception as e:
-                self.logger.error(f"Error storing results for {blob_name}: {str(e)}")
+                self.logger.error(f"Error storing results: {str(e)}\n{traceback.format_exc()}")
                 return {}
             
-            # Step 6: Log processing summary
-            self.logger.info("Step 6: Logging processing summary")
-            try:
-                summary = {
-                    "file": blob_name,
-                    "processing_time": datetime.now().isoformat(),
-                    "metadata": result["data"].get("metadata", {}),
-                    "financial_statements": list(result["data"].get("financial_statements", {}).keys()),
-                    "metrics_count": len(result["data"].get("metrics", {})),
-                    "risk_factors_count": sum(len(factors) for factors in result["data"].get("risk_factors", {}).values()),
-                    "executives_count": len(result["data"].get("executive_compensation", {}).get("executives", [])),
-                    "vector_content_length": len(result["vector_content"])
-                }
-                self.logger.info(f"Processing summary: {json.dumps(summary, indent=2)}")
-            except Exception as e:
-                self.logger.error(f"Error generating summary for {blob_name}: {str(e)}")
+        except Exception as e:
+            self.logger.error(f"Error in process_gcs_pdf: {str(e)}\n{traceback.format_exc()}")
+            return {}
+
+    def _process_batch(self, pages, blob_name: str, start_index: int) -> Dict[str, Any]:
+        """Process a batch of PDF pages"""
+        try:
+            results = []
+            for i, page in enumerate(pages):
+                try:
+                    # Extract text
+                    text = page.extract_text()
+                    if not text:
+                        self.logger.warning(f"No text extracted from page {start_index + i}")
+                        continue
+                    
+                    # Extract tables
+                    tables = self._extract_tables_from_page(page)
+                    self.logger.info(f"Extracted {len(tables)} tables from page {start_index + i}")
+                    
+                    # Process content
+                    result = {
+                        "metadata": self.extract_metadata_from_text(text, f"{blob_name}_page_{start_index + i}"),
+                        "content": text,
+                        "tables": tables,
+                        "page": start_index + i
+                    }
+                    results.append(result)
+                    
+                except Exception as e:
+                    self.logger.error(f"Error processing page {start_index + i}: {str(e)}\n{traceback.format_exc()}")
+                    continue
             
-            self.logger.info(f"Successfully completed end-to-end processing of {blob_name}")
-            return result["data"]
+            return self._merge_results(results) if results else {}
             
         except Exception as e:
-            self.logger.log_error(e, "gcs_pdf_processing", {"blob_name": blob_name})
+            self.logger.error(f"Error in _process_batch: {str(e)}\n{traceback.format_exc()}")
             return {}
 
     def _chunk_pdf_content(self, reader: PdfReader) -> List[Tuple[int, str, List[pd.DataFrame]]]:
@@ -563,39 +662,72 @@ class EnhancedSECFilingProcessor:
         if not results:
             return {}
         
-        # Initialize final result with first chunk's data
-        final_result = results[0].copy()
+        # Initialize final result with default structure
+        final_result = {
+            "financial_statements": {},
+            "metrics": {},
+            "risk_factors": {},
+            "executive_compensation": {
+                "executives": [],
+                "summary": {}
+            }
+        }
         
-        # Merge financial statements
+        # Initialize with first chunk's data if available
+        if results:
+            first_result = results[0]
+            if "financial_statements" in first_result:
+                final_result["financial_statements"] = first_result["financial_statements"].copy()
+            if "metrics" in first_result:
+                final_result["metrics"] = first_result["metrics"].copy()
+            if "risk_factors" in first_result:
+                final_result["risk_factors"] = first_result["risk_factors"].copy()
+            if "executive_compensation" in first_result:
+                final_result["executive_compensation"] = {
+                    "executives": first_result["executive_compensation"].get("executives", []).copy(),
+                    "summary": first_result["executive_compensation"].get("summary", {}).copy()
+                }
+        
+        # Merge remaining chunks
         for chunk_result in results[1:]:
-            # Merge financial statements
-            for statement_type, table in chunk_result["financial_statements"].items():
-                if statement_type not in final_result["financial_statements"]:
-                    final_result["financial_statements"][statement_type] = table
-            
-            # Merge metrics (take the most recent values)
-            for metric, value in chunk_result["metrics"].items():
-                if metric not in final_result["metrics"]:
-                    final_result["metrics"][metric] = value
-            
-            # Merge risk factors
-            for category, factors in chunk_result["risk_factors"].items():
-                if category not in final_result["risk_factors"]:
-                    final_result["risk_factors"][category] = []
-                final_result["risk_factors"][category].extend(
-                    factor for factor in factors 
-                    if factor not in final_result["risk_factors"][category]
-                )
-            
-            # Merge executive compensation
-            for executive in chunk_result["executive_compensation"]["executives"]:
-                if executive not in final_result["executive_compensation"]["executives"]:
-                    final_result["executive_compensation"]["executives"].append(executive)
-            
-            # Update compensation summary
-            for key, value in chunk_result["executive_compensation"]["summary"].items():
-                if key not in final_result["executive_compensation"]["summary"]:
-                    final_result["executive_compensation"]["summary"][key] = value
+            try:
+                # Merge financial statements
+                if "financial_statements" in chunk_result:
+                    for statement_type, table in chunk_result["financial_statements"].items():
+                        if statement_type not in final_result["financial_statements"]:
+                            final_result["financial_statements"][statement_type] = table
+                
+                # Merge metrics
+                if "metrics" in chunk_result:
+                    for metric, value in chunk_result["metrics"].items():
+                        if metric not in final_result["metrics"]:
+                            final_result["metrics"][metric] = value
+                
+                # Merge risk factors
+                if "risk_factors" in chunk_result:
+                    for category, factors in chunk_result["risk_factors"].items():
+                        if category not in final_result["risk_factors"]:
+                            final_result["risk_factors"][category] = []
+                        final_result["risk_factors"][category].extend(
+                            factor for factor in factors 
+                            if factor not in final_result["risk_factors"][category]
+                        )
+                
+                # Merge executive compensation
+                if "executive_compensation" in chunk_result:
+                    comp = chunk_result["executive_compensation"]
+                    if "executives" in comp:
+                        for executive in comp["executives"]:
+                            if executive not in final_result["executive_compensation"]["executives"]:
+                                final_result["executive_compensation"]["executives"].append(executive)
+                    if "summary" in comp:
+                        for key, value in comp["summary"].items():
+                            if key not in final_result["executive_compensation"]["summary"]:
+                                final_result["executive_compensation"]["summary"][key] = value
+                
+            except Exception as e:
+                self.logger.error(f"Error merging chunk result: {str(e)}\n{traceback.format_exc()}")
+                continue
         
         return final_result
 
@@ -647,6 +779,75 @@ class EnhancedSECFilingProcessor:
             self.logger.log_error(e, "metadata_extraction", {"source_name": source_name})
         
         return metadata
+
+    def extract_metadata_from_text(self, content: Union[str, bytes], source_name: str) -> Dict[str, Any]:
+        """
+        Extract metadata from text content.
+        
+        Args:
+            content: Text content as either string or bytes
+            source_name: Source identifier for the content
+            
+        Returns:
+            Dictionary containing metadata information
+        """
+        try:
+            # Convert bytes to string if needed
+            if isinstance(content, bytes):
+                content = content.decode('utf-8')
+            
+            metadata = {
+                "company_name": "",
+                "form_type": "",
+                "filing_date": "",
+                "cik": "",
+                "period_end": "",
+                "fiscal_year": "",
+                "source": source_name
+            }
+            
+            # Extract company name
+            company_match = re.search(r"COMPANY\s+CONFORMED\s+NAME:\s+(.*?)\n", content)
+            if company_match:
+                metadata["company_name"] = company_match.group(1).strip()
+            
+            # Extract form type
+            for form_type in self.form_types:
+                if form_type in content:
+                    metadata["form_type"] = form_type
+                    break
+            
+            # Extract filing date
+            date_match = re.search(r"FILED\s+AS\s+OF\s+DATE:\s+(\d{8})", content)
+            if date_match:
+                date_str = date_match.group(1)
+                metadata["filing_date"] = datetime.strptime(date_str, "%Y%m%d").strftime("%Y-%m-%d")
+            
+            # Extract CIK
+            cik_match = re.search(r"CENTRAL\s+INDEX\s+KEY:\s+(\d+)", content)
+            if cik_match:
+                metadata["cik"] = cik_match.group(1)
+            
+            # Extract period end date
+            period_match = re.search(r"CONFORMED\s+PERIOD\s+OF\s+REPORT:\s+(\d{8})", content)
+            if period_match:
+                date_str = period_match.group(1)
+                metadata["period_end"] = datetime.strptime(date_str, "%Y%m%d").strftime("%Y-%m-%d")
+                metadata["fiscal_year"] = datetime.strptime(date_str, "%Y%m%d").strftime("%Y")
+            
+            return metadata
+            
+        except Exception as e:
+            self.logger.log_error(e, "metadata_extraction_from_text", {"source_name": source_name})
+            return {
+                "company_name": "",
+                "form_type": "",
+                "filing_date": "",
+                "cik": "",
+                "period_end": "",
+                "fiscal_year": "",
+                "source": source_name
+            }
 
     def extract_tables_from_reader(self, reader: PdfReader) -> List[pd.DataFrame]:
         """Extract tables from PDF reader object using multiple methods with fallbacks"""
@@ -768,23 +969,58 @@ class EnhancedSECFilingProcessor:
             return []
 
     def _validate_pdf(self, reader: PdfReader) -> bool:
-        """Validate PDF structure and content"""
+        """Validate PDF structure and content with enhanced error handling"""
         try:
             # Check if PDF has pages
-            if not reader.pages:
+            if not reader.pages or len(reader.pages) == 0:
+                self.logger.warning("PDF has no pages")
                 return False
             
             # Check if first page has content
             first_page = reader.pages[0]
-            if not first_page.get_contents():
+            if not first_page or not first_page.extract_text():
+                self.logger.warning("First page has no content")
                 return False
             
             # Check if PDF has a root object
-            if not hasattr(reader, 'root_object'):
+            if not hasattr(reader, 'root_object') or not reader.root_object:
+                self.logger.warning("PDF has no root object")
+                return False
+            
+            # Check for EOF marker
+            try:
+                with BytesIO() as temp_pdf:
+                    # Write a small portion of the PDF to check structure
+                    for page in reader.pages[:1]:  # Only check first page
+                        if page.get_contents():
+                            temp_pdf.write(page.get_contents())
+                    temp_pdf.seek(-1024, 2)  # Look for EOF in last 1KB
+                    last_chunk = temp_pdf.read()
+                    if b"%%EOF" not in last_chunk:
+                        self.logger.warning("PDF missing EOF marker")
+                        return False
+            except Exception as e:
+                self.logger.warning(f"Error checking EOF marker: {str(e)}")
+                # Don't fail just because of EOF check
+                pass
+            
+            # Check for basic metadata
+            try:
+                if not reader.metadata:
+                    self.logger.warning("PDF has no metadata")
+                    # Don't fail just because of missing metadata
+            except Exception:
+                pass
+            
+            # Check for encryption
+            if reader.is_encrypted:
+                self.logger.warning("PDF is encrypted")
                 return False
             
             return True
-        except Exception:
+            
+        except Exception as e:
+            self.logger.error(f"Error validating PDF: {str(e)}")
             return False
 
     def _extract_tables_basic(self, reader: PdfReader) -> List[pd.DataFrame]:

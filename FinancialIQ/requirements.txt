@@ -9,7 +9,7 @@ google-cloud-storage
 google-cloud-api-keys
 google-cloud-logging
 google-cloud-bigquery
-
+google-cloud-resource-manager
 # PDF Processing
 PyPDF2
 unstructured
@@ -19,7 +19,7 @@ JPype1
 camelot-py
 
 # RAG and LLM
-langchain==0.1.9
+langchain
 langchain-core
 langchain-community
 langchain-text-splitters
@@ -27,6 +27,7 @@ langchain-google-vertexai
 langchain-google-genai
 faiss-cpu
 sentence-transformers
+huggingface-hub[hf_xet]
 
 # Web Interface
 streamlit
@@ -57,4 +58,6 @@ mypy
 tqdm
 python-dateutil
 requests
-shapely 
+shapely
+nest_asyncio
+
