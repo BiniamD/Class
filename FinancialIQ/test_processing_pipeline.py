@@ -10,7 +10,7 @@ from google.cloud import storage
 from dotenv import load_dotenv
 from src.document_processor import EnhancedSECFilingProcessor
 from src.logger import FinancialIQLogger
-from langchain_google_vertexai import VertexAIEmbeddings
+from langchain_google_vertexai import VertexAIEmbeddings,VectorSearchVectorStore,VectorSearchVectorStoreDatastore
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain.schema import Document
 import vertexai
@@ -346,7 +346,7 @@ def generate_and_upload_embeddings(all_documents, index, endpoint, embeddings_bu
         
         # *** Vector Store operations ***
         print("\n  💾 Setting up Vector Store...")
-        vector_store = MatchingEngine.from_components(
+        vector_store = VectorSearchVectorStore.from_components(
             project_id=project_id,
             region=location, 
             index_id=index.name,

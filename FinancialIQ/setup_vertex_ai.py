@@ -30,6 +30,7 @@ class VertexAISetup:
     def __init__(self):
         self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
         self.location = os.getenv("GOOGLE_CLOUD_LOCATION")
+        self.a_new_index = None
         self.embeddings = VertexAIEmbeddings(
             model_name=os.getenv("VERTEX_AI_EMBEDDING_MODEL"),
             project=self.project_id,
@@ -119,41 +120,62 @@ class VertexAISetup:
                 leaf_node_embedding_count=int(os.getenv("VERTEX_AI_LEAF_NODE_EMBEDDING_COUNT")),
                 leaf_nodes_to_search_percent=int(os.getenv("VERTEX_AI_LEAF_NODES_TO_SEARCH_PERCENT"))
             )
+            self.a_new_index = index
             logger.info(f"Created Tree-AH index {index_name} with ID {index.name}")
             return index.name
         except Exception as e:
             logger.error(f"Error creating index: {str(e)}")
             raise
             
-    def create_index_endpoint(self, endpoint_name: str) -> str:
-        """Create an index endpoint."""
+    def create_index_endpoint(self, project_id: str, location: str, display_name: str) -> str:
+        """Creates an index endpoint if it doesn't exist."""
         try:
-            # Check if endpoint already exists
-            try:
-                endpoint = aiplatform.MatchingEngineIndexEndpoint(endpoint_name=endpoint_name)
-                logger.info(f"Endpoint {endpoint_name} already exists with ID {endpoint.name}")
-                return endpoint.name
-            except Exception:
-                logger.info(f"Creating new endpoint {endpoint_name}...")
-            
-            # Create new endpoint
-            endpoint = aiplatform.MatchingEngineIndexEndpoint.create(
-                display_name=endpoint_name,
-                description="FinancialIQ SEC Filing Endpoint",
-                public_endpoint_enabled=True
+            # Initialize the Vertex AI client
+            client = aiplatform.gapic.IndexEndpointServiceClient(
+                client_options={"api_endpoint": f"{location}-aiplatform.googleapis.com"}
             )
-            logger.info(f"Created endpoint {endpoint_name} with ID {endpoint.name}")
-            return endpoint.name
+            
+            # Check if endpoint already exists
+            parent = f"projects/{project_id}/locations/{location}"
+            list_request = aiplatform.gapic.ListIndexEndpointsRequest(parent=parent)
+            list_response = client.list_index_endpoints(request=list_request)
+            
+            for endpoint in list_response:
+                if endpoint.display_name == display_name:
+                    logger.info(f"Found existing endpoint: {endpoint.name}")
+                    return endpoint.name
+            
+            # Create new endpoint if it doesn't exist
+            endpoint = {
+                "display_name": display_name,
+                "description": "Endpoint for FinancialIQ vector search",
+                "public_endpoint_enabled": True
+            }
+            
+            create_request = aiplatform.gapic.CreateIndexEndpointRequest(
+                parent=parent,
+                index_endpoint=endpoint
+            )
+            
+            operation = client.create_index_endpoint(request=create_request)
+            response = operation.result()
+            logger.info(f"Created new endpoint: {response.name}")
+            return response.name
+            
         except Exception as e:
-            logger.error(f"Error creating endpoint: {str(e)}")
+            logger.error(f"Error creating index endpoint: {str(e)}")
             raise
             
     def deploy_index_to_endpoint(self, index_id: str, endpoint_id: str) -> None:
         """Deploy an index to an endpoint."""
         try:
+            # Get the actual index and endpoint objects
+            index = aiplatform.MatchingEngineIndex(index_id)
             endpoint = aiplatform.MatchingEngineIndexEndpoint(endpoint_id)
+            
+            # Deploy the index
             endpoint.deploy_index(
-                index=index_id,
+                index=index,
                 deployed_index_id=f"deployed_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
             )
             logger.info(f"Deployed index {index_id} to endpoint {endpoint_id}")
@@ -300,7 +322,11 @@ def main():
         # Create index and endpoint
         logger.info("Creating Vertex AI resources...")
         index_id = setup.create_matching_engine_index(index_name, bucket_name)
-        endpoint_id = setup.create_index_endpoint(endpoint_name)
+        endpoint_id = setup.create_index_endpoint(setup.project_id, setup.location, endpoint_name)
+        
+        # Deploy the index to the endpoint
+        logger.info("Deploying index to endpoint...")
+        setup.deploy_index_to_endpoint(index_id, endpoint_id)
         
         # Update .env file with resource IDs
         env_updates = {
@@ -314,7 +340,7 @@ def main():
         logger.info(f"Index Resource Name: {index_id}")
         logger.info(f"Endpoint Resource Name: {endpoint_id}")
         logger.info(f"GCS Bucket: {bucket_name}")
-        logger.warning("Index deployment was NOT started. You need to populate the index first.")
+        logger.info("Index has been deployed to the endpoint.")
         logger.warning("Run the processing pipeline to generate embeddings and upload them to the GCS bucket.")
         logger.warning(f"Embeddings should be uploaded to: gs://{bucket_name}/embeddings/embeddings.jsonl")
         
