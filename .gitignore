@@ -20,6 +20,9 @@ sp500_master_data.csv
 
 # remove sec_filings_pdf folder
 sec_filings_pdf/
-venv/
 .venv/
 
+# remove all files in the data folder
+*venv/*
+*/venv/*
+*/venv

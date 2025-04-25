@@ -10,6 +10,11 @@ Original file is located at
 # Commented out IPython magic to ensure Python compatibility.
 # %pip install --user --upgrade google-cloud-aiplatform vertexai
 
+import IPython
+
+app=IPython.Application.instance()
+app.kernel.do_shutdown(True)
+
 # Commented out IPython magic to ensure Python compatibility.
 # %pip install --upgrade langchain
 # %pip install --upgrade langchain-core
@@ -416,7 +421,7 @@ vsvectordb = VectorSearchVectorStore.from_components(
     gcs_bucket_name =f"gs://{VSVDB_EMBEDDING_DIR}".split("/")[2],
     index_id = index.name,
     embedding = embeddings,
-    documents = doc_splits,
+    #documents = doc_splits,
     endpoint_id=index_endpoint.name,
     stream_update=True,
 
@@ -432,7 +437,7 @@ print(f"Number of metadata: {len(metadata)}")
 for i in range(0, len(texts),1000):
   vsvectordb.add_texts(texts[i:i+1000], metadata[i:i+1000])
 
-vsvectordb.similarity_search("What are the Risk Factors of 10x Genomics, Inc.",k=2)
+vsvectordb.similarity_search("What are the income of 10x Genomics, Inc.",k=2)
 
 vsvectordb.similarity_search("What are the Risk Factors of DH Enchantment Inc.",k=2)
 
@@ -450,3 +455,109 @@ llm = VertexAI (
 NUMBER_OF_RESULTS = 10
 
 SEARCH_DISTANCE_THRESHOLD = 0.6
+
+retriever = vsvectordb.as_retriever(
+    search_type = "similarity",
+    search_kwargs = {
+        "k": NUMBER_OF_RESULTS,
+        "search_distance": SEARCH_DISTANCE_THRESHOLD
+    },
+    filters= None,
+)
+
+template = """
+          **Context:** You are an expert financial analyst assistant. Your task is to analyze and synthesize a specific excerpt from an SEC filing document to directly address a user's query.
+
+          **User Query:**
+          "{question}"
+
+          strictly use only the follwing pieces of context to answer the question at the end.Think step by step.
+          Do not try to make up an answer:
+                          if the context does not contain information about the user's query, just say that you don't know, don't try to make up an answer.
+                          if the context is empty, just say that you don't know, don't try to make up an answer.
+          **Context:**
+          ---
+          {context}
+          ---
+
+          **Analysis Instructions:**
+          1.  **Understand the Query:** What specific information is the user seeking? (e.g., risk factors, financial performance, specific events, definitions).
+          2.  **Scan the Excerpt:** Read the provided excerpt carefully.
+          3.  **Identify Relevance:** Pinpoint sentences, data points, or statements within the excerpt that *directly* answer or relate to the user's query. Ignore irrelevant information.
+          4.  **Synthesize Findings:** Based *only* on the relevant information identified in the excerpt, construct a comprehensive yet concise summary.
+              *   Aim for 3-5 clear sentences.
+              *   If the query asks for specific details (like risks or numbers), try to include them.
+              *   Ensure the summary directly addresses the user's query.
+          5.  **Handle Irrelevance:** If the excerpt contains *no information* relevant to the query, explicitly state that "The provided excerpt does not contain information relevant to the query." Do not invent information or summarize unrelated content.
+
+          **Synthesized Summary:**
+                            """
+
+#from re import VERBOSE
+reteriveal_qa = RetrievalQA.from_chain_type(
+    llm = llm,
+    chain_type = "stuff",
+    retriever = retriever,
+    return_source_documents = True,
+    verbose = True,
+    chain_type_kwargs = {
+        "prompt": PromptTemplate
+        (
+                        template = template,
+            input_variables = ["context","question"],
+        ),
+    },
+)
+
+# enable for troublshooting
+reteriveal_qa.combine_documents_chain.verbose = True
+reteriveal_qa.combine_documents_chain.llm_chain.verbose = True
+reteriveal_qa.combine_documents_chain.llm_chain.llm.verbose = True
+
+def formatter(result):
+  print(f"questions: {result['query']}")
+  print("."*80)
+  print(f"Answer: {result['result']}")
+  print(f"Sources: {result['source_documents']}")
+  if "source_documents" in result.keys():
+    for idx,ref in enumerate(result["source_documents"]):
+      print("."*80)
+      print(f"Reference #: {idx}")
+      print("."*80)
+      if "score" in ref.metadata:
+        print(f"Matching Score: {ref.metadata['score']}")
+      if "source" in ref.metadata:
+        print(f"Source: {ref.metadata['source']}")
+      if "document_name" in ref.metadata:
+        print(f"Document Name: {ref.metadata['document_name']}")
+      print("."*80)
+      print(f"Content: \n{ref.page_content}")
+  print("."*80)
+  print(f"Response:{wrap(result['result'])}")
+  print("."*80)
+
+def wrap(s):
+  return "\n".join(textwrap.wrap(s, width=120, break_long_words=False))
+
+
+def ask(
+    query,
+    qa=reteriveal_qa,
+    k=NUMBER_OF_RESULTS,
+    search_distance_threshold=SEARCH_DISTANCE_THRESHOLD,
+    filters={}
+):
+  reteriveal_qa.retriever.search_kwargs['search_distance'] = search_distance_threshold
+  reteriveal_qa.retriever.search_kwargs['k'] = k
+  reteriveal_qa.retriever.search_kwargs['filters'] = filters
+  result = reteriveal_qa({"query":query})
+  formatter(result)
+
+ask("what is Net income for  ELITE PHARMACEUTICALS INC ?")
+
+filters = {
+    "namespace" : "document_name",
+    "allwo_list" : ["DH ENCHANTMENT INC_NT 10-Q_2025-02-13.pdf"]
+}
+
+ask("What are the Risk Factors of DH Enchantment Inc.?", filters=filters)
