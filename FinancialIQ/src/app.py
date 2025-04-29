@@ -128,6 +128,23 @@ if 'current_sources' not in st.session_state:
 if 'financial_metrics' not in st.session_state:
     st.session_state.financial_metrics = None
 
+# --- Advanced Filtering Setup ---
+# Try to load sec_filings.csv for filter options if metadata.csv is missing
+filings_df = None
+try:
+    filings_df = pd.read_csv("../documents/sec_filings.csv")
+    filings_df['filedAt'] = pd.to_datetime(filings_df['filedAt'], errors='coerce')
+    available_companies = sorted(filings_df['companyName'].dropna().unique().tolist())
+    available_form_types = sorted(filings_df['formType'].dropna().unique().tolist())
+    min_date = filings_df['filedAt'].min()
+    max_date = filings_df['filedAt'].max()
+except Exception as e:
+    filings_df = None
+    available_companies = []
+    available_form_types = []
+    min_date = None
+    max_date = None
+
 class FinancialIQApp:
     """Streamlit application for FinancialIQ"""
     
@@ -204,19 +221,29 @@ class FinancialIQApp:
             st.error("System not properly initialized. Please run test_processing_pipeline.py first.")
             return
             
-        # Add company and form type filters
-        col1, col2 = st.columns(2)
+        # --- Enhanced Filtering UI ---
+        col1, col2, col3 = st.columns(3)
         with col1:
             company_filter = st.selectbox(
                 "Filter by Company",
-                ["All"] + st.session_state.companies
+                ["All"] + (available_companies if available_companies else st.session_state.companies)
             )
         with col2:
             form_filter = st.selectbox(
                 "Filter by Form Type",
-                ["All"] + st.session_state.form_types
+                ["All"] + (available_form_types if available_form_types else st.session_state.form_types)
             )
-            
+        with col3:
+            if min_date is not None and max_date is not None:
+                date_range = st.date_input(
+                    "Filing Date Range",
+                    value=(min_date.date(), max_date.date()),
+                    min_value=min_date.date(),
+                    max_value=max_date.date()
+                )
+            else:
+                date_range = None
+        
         # Add search functionality
         query = st.text_input("Enter your question about SEC filings:")
         if query:
@@ -228,7 +255,18 @@ class FinancialIQApp:
                     filtered_query = f"For {company_filter}: {query}"
                 if form_filter != "All":
                     filtered_query = f"In {form_filter} filings: {filtered_query}"
-                    
+                
+                # --- Filter filings_df for visualization and search context ---
+                filtered_filings = filings_df.copy() if filings_df is not None else None
+                if filtered_filings is not None:
+                    if company_filter != "All":
+                        filtered_filings = filtered_filings[filtered_filings['companyName'] == company_filter]
+                    if form_filter != "All":
+                        filtered_filings = filtered_filings[filtered_filings['formType'] == form_filter]
+                    if date_range is not None:
+                        start_date, end_date = date_range
+                        filtered_filings = filtered_filings[(filtered_filings['filedAt'] >= pd.to_datetime(start_date)) & (filtered_filings['filedAt'] <= pd.to_datetime(end_date))]
+                
                 logging.info(f"Searching documents with query: {filtered_query}")
                 results = self.system.search_documents(filtered_query, k=5)
                 logging.info(f"Found {len(results)} results")
@@ -241,7 +279,20 @@ class FinancialIQApp:
                         st.markdown(f"**Filing Date:** {doc.metadata.get('filedAt', 'Unknown')}")
                         st.markdown("**Content:**")
                         st.markdown(doc.page_content)
-                        
+
+                # --- Advanced Visualization: Filings per Form Type (Filtered) ---
+                st.markdown("### Filings per Form Type (Filtered Data)")
+                try:
+                    if filtered_filings is not None and not filtered_filings.empty:
+                        form_counts = filtered_filings['formType'].value_counts().reset_index()
+                        form_counts.columns = ['Form Type', 'Count']
+                        fig = px.bar(form_counts, x='Form Type', y='Count', title='Number of Filings per Form Type (Filtered)', color='Form Type')
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.info("No filings available for the selected filters.")
+                except Exception as e:
+                    st.info(f"Could not load filings data for visualization: {e}")
+                
             except Exception as e:
                 logging.error(f"Error searching documents: {str(e)}", exc_info=True)
                 st.error(f"Error searching documents: {str(e)}")

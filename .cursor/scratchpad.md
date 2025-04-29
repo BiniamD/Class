@@ -1,194 +1,80 @@
-# CNN-BiLSTM Trading System - Technical Documentation
+# FinancialIQ Project - Planning and Coordination Scratchpad
 
 ## Background and Motivation
 
-This document provides a comprehensive explanation of the CNN-BiLSTM trading system implemented in Final.py. The system uses deep learning to predict stock price movements and generate trading signals based on those predictions.
+FinancialIQ is an intelligent system for analyzing SEC filings using advanced NLP and Retrieval-Augmented Generation (RAG) techniques. The project aims to provide:
+- Natural language Q&A over SEC filings
+- Extraction of financial metrics, risk factors, and metadata
+- Interactive visualizations for financial analysis
+- Performance optimization via caching and logging
+- A robust, user-friendly Streamlit interface
 
 ## Key Challenges and Analysis
 
-1. **Time Series Analysis**: Stock data is time-dependent, requiring specialized techniques for preprocessing and modeling.
-2. **Feature Engineering**: Converting raw price data into meaningful technical indicators.
-3. **Class Imbalance**: Financial datasets often have imbalanced buy/sell signals.
-4. **Model Architecture Design**: Creating an effective neural network that captures both spatial (CNN) and temporal (BiLSTM) patterns.
-5. **Trading Signal Generation**: Converting model predictions into actionable trading decisions.
-6. **Performance Evaluation**: Measuring both predictive and trading performance.
+1. **Complex Document Processing**: Extracting structured data (tables, metrics, risk factors) from diverse SEC filings (PDFs) is error-prone and requires robust handling.
+2. **Metadata Consistency**: Ensuring reliable mapping between extracted content and metadata (company, form type, filing date) for accurate filtering and display.
+3. **RAG System Integration**: Combining document retrieval, LLM-based reasoning, and prompt engineering for high-quality answers.
+4. **Scalability and Performance**: Efficient caching, vector store management, and GCP integration for large-scale document sets.
+5. **UI/UX**: Providing intuitive filtering, result display, and visualization in Streamlit.
+6. **Testing and Monitoring**: Ensuring reliability, error handling, and observability across the pipeline.
 
 ## High-level Task Breakdown
 
-1. **Data Preparation**
-   - Load stock data
-   - Calculate technical indicators
-   - Create sequences for time series modeling
-   - Split data into training, validation, and test sets
-   - Apply SMOTE for class balancing
+### 1. Visualization Enhancements
+- [ ] Implement advanced financial and risk visualizations in Streamlit
+  - **Success Criteria**: Users can view interactive charts (trends, ratios, heatmaps) for selected companies/filings
+- [ ] Integrate visualizations with query results and metadata filters
+  - **Success Criteria**: Visualizations update based on user filters and search results
 
-2. **Model Architecture**
-   - Convolutional layers for feature extraction
-   - Bidirectional LSTM layers for capturing temporal dependencies
-   - Attention mechanism for focusing on important time steps
-   - Dense layers for final prediction
+### 2. Streamlit UI Improvements
+- [ ] Add advanced filtering (by company, form type, date range, etc.)
+  - **Success Criteria**: Users can filter search results using multiple criteria
+- [ ] Improve source citation and document info display
+  - **Success Criteria**: Each answer clearly shows source, metadata, and links
+- [ ] Enhance error messages and user guidance
+  - **Success Criteria**: Users receive actionable feedback for errors or empty results
 
-3. **Training Process**
-   - Train the model using resampled data
-   - Validate on a separate validation set
-   - Monitor accuracy and loss metrics
+### 3. Performance and Caching
+- [ ] Optimize caching of document processing and LLM responses
+  - **Success Criteria**: Repeated queries and document loads are significantly faster
+- [ ] Profile and optimize vector store and retrieval performance
+  - **Success Criteria**: Search latency is minimized for large document sets
 
-4. **Signal Generation**
-   - Convert model predictions to trading signals
-   - Apply confidence thresholds for decision making
-   - Generate positions (-1 for sell, 0 for hold, 1 for buy)
+### 4. Testing and Error Handling
+- [ ] Expand automated tests for document processing, RAG, and UI
+  - **Success Criteria**: All core modules have passing unit/integration tests
+- [ ] Add robust error handling and logging throughout the pipeline
+  - **Success Criteria**: All errors are logged and surfaced in the UI or logs
 
-5. **Performance Evaluation**
-   - Calculate predictive metrics (accuracy, precision, recall, F1)
-   - Calculate trading metrics (returns, Sharpe ratio, drawdown)
-   - Visualize results through various plots
-
-6. **Multi-Symbol Analysis**
-   - Process multiple stock symbols
-   - Compare performance across symbols
-   - Generate aggregate statistics
-
-## Detailed Data Flow
-
-### 1. Data Loading and Preprocessing
-
-![Data Preprocessing Flow](https://i.imgur.com/GWOODg9.png)
-
-The system begins by loading stock data from a CSV file and filtering for a specific symbol. The data preprocessing pipeline includes:
-
-1. **Technical Indicator Calculation**:
-   - Moving Averages (MA_50, MA_200)
-   - Relative Strength Index (RSI)
-   - Moving Average Convergence Divergence (MACD)
-   - Bollinger Bands
-
-2. **Sequence Creation**:
-   - For each time step t, create a sequence of the previous `seq_length` (30) days
-   - Each sequence includes multiple features (price, volume, technical indicators)
-   - Target variable: 1 if next day's return > 0, else 0 (binary classification)
-
-3. **Feature Selection**:
-   - Use mutual information to identify the most informative features
-   - Standardize features using MinMaxScaler
-
-4. **Data Splitting**:
-   - Training set: 70% of data
-   - Validation set: 15% of data
-   - Test set: 15% of data
-
-5. **Class Balancing**:
-   - Apply SMOTE to the training set to address class imbalance
-
-### 2. Model Architecture
-
-![CNN-BiLSTM Architecture](https://i.imgur.com/bQJZoGL.png)
-
-The model uses a hybrid CNN-BiLSTM architecture with attention mechanism:
-
-1. **Convolutional Layers**:
-   - Input shape: (sequence_length, num_features)
-   - First Conv1D layer: 64 filters, kernel size 3
-   - MaxPooling and Dropout for regularization
-
-2. **Bidirectional LSTM Layers**:
-   - First BiLSTM: 128 units, returns sequences
-   - Second BiLSTM: 32 units, returns sequences
-   - Final BiLSTM: 32 units, returns final state
-
-3. **Attention Mechanism**:
-   - Calculates attention weights for each time step
-   - Weights the importance of different time steps in the sequence
-
-4. **Dense Layers**:
-   - 32 units with ReLU activation
-   - Final output layer with sigmoid activation for binary classification
-
-### 3. Training Process
-
-The model is trained using:
-- Optimizer: Adam with learning rate 0.001
-- Loss function: Binary cross-entropy
-- Batch size: 32
-- Epochs: 50
-- Early stopping based on validation loss
-
-### 4. Signal Generation
-
-![Trading Signal Generation](https://i.imgur.com/JfA9XKV.png)
-
-The system generates trading signals from model predictions:
-
-1. **Confidence Calculation**:
-   - Probability output from the model (0 to 1)
-   - Apply confidence threshold (default: 0.6)
-
-2. **Position Generation**:
-   - Long (1): When predicted class is 1 and confidence > threshold
-   - Short (-1): When predicted class is 0 and confidence > threshold
-   - Neutral (0): When confidence ≤ threshold
-
-3. **Position Sizing**:
-   - Scale position size based on prediction confidence
-   - Higher confidence = larger position size
-
-### 5. Performance Evaluation
-
-The system evaluates performance using multiple metrics:
-
-1. **Predictive Performance**:
-   - Accuracy, Precision, Recall, F1 Score
-   - Confusion Matrix
-
-2. **Trading Performance**:
-   - Total Return
-   - Annual Return
-   - Sharpe Ratio
-   - Maximum Drawdown
-   - Win Rate
-   - Profit Factor
-
-3. **Trade Simulation**:
-   - Simulates trades with stop-loss and take-profit
-   - Tracks portfolio value over time
-
-### 6. Visualization
-
-The system generates various visualizations:
-
-1. **Model Performance**:
-   - Training/validation accuracy and loss curves
-   - Confusion matrix
-
-2. **Trading Performance**:
-   - Cumulative returns comparison
-   - Drawdown chart
-   - Buy/sell signals on price chart
-
-3. **Multi-Symbol Analysis**:
-   - Performance metrics heatmap
-   - Top performers by return
-   - Risk-return scatter plot
-   - Trading dashboard with multiple metrics
+### 5. Documentation and Deployment
+- [ ] Write a user guide and deployment documentation
+  - **Success Criteria**: New users can set up and use the system with minimal friction
+- [ ] Set up CI/CD pipeline and monitoring
+  - **Success Criteria**: Automated tests run on push, and system health is monitored
 
 ## Project Status Board
 
-- [x] Understand data preprocessing pipeline
-- [x] Examine model architecture details
-- [x] Review training process and hyperparameters
-- [x] Analyze signal generation logic
-- [x] Evaluate performance metrics calculation
-- [x] Study visualization components
-- [x] Compare multi-symbol analysis approach
-- [~] Implement class weighting in model training to address class imbalance (in progress)
-- [~] Enhance feature selection using mutual information for each symbol (in progress)
-- [~] Add more advanced regularization (e.g., early stopping, learning rate reduction) (in progress)
-- [ ] Re-run training and evaluate improvements in precision and F1
+- [x] Implement advanced visualizations
+- [x] Enhance Streamlit interface and filtering
+- [ ] Optimize caching and performance
+- [ ] Expand testing and error handling
+- [ ] Complete documentation and deployment setup
 
 ## Executor's Feedback or Assistance Requests
 
-- Implementation of all planned improvements has started: class weighting, dynamic feature selection, and advanced regularization.
-- Will update after each subtask is completed and before re-running the full training.
+*To be updated by Executor as tasks are executed, blockers encountered, or feedback is needed.*
+
+### 2024-06-13: Advanced Visualization Added
+- Implemented a bar chart showing the number of filings per form type (10-K, 10-Q, etc.) using Plotly, displayed after search results in the Streamlit UI.
+- Data source: documents/sec_filings.csv. If the file is missing or malformed, a user-friendly message is shown.
+- This visualization provides users with an overview of filing distribution and demonstrates integration of advanced, interactive charts.
+
+### 2024-06-13: Advanced Filtering Added
+- Added advanced filtering options to the Streamlit UI: company, form type, and filing date range.
+- Filters are populated from sec_filings.csv if metadata.csv is missing.
+- All selected filters are applied to both the search results and the filings visualization.
+- If no filings match the filters, a user-friendly message is shown.
 
 ## Lessons
 
-*This section will document learnings, challenges, and solutions encountered during the project.* 
+*To be updated with key learnings, solutions to challenges, and reusable patterns as the project progresses.* 
