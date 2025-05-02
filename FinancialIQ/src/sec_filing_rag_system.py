@@ -26,9 +26,17 @@ from langchain.prompts import PromptTemplate
 from sec_filing_metadata import SECFilingMetadata
 from cache_manager import CacheManager
 from langchain_community.embeddings import HuggingFaceEmbeddings
+from google.cloud import aiplatform
+from google.cloud import aiplatform_v1beta1
+import logging
+from langchain_google_vertexai import VectorSearchVectorStore
 
 # Load environment variables
 load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class SECFilingProcessor:
     """Handles processing of SEC filing PDFs"""
@@ -136,6 +144,7 @@ class FinancialIQSystem:
     """Main system class for SEC filing analysis"""
     
     def __init__(self, project_id: str, location: str, metadata_csv_path: str):
+        """Initialize the system with Google Cloud configuration"""
         self.project_id = project_id
         self.location = location
         self.metadata_csv_path = metadata_csv_path
@@ -143,26 +152,35 @@ class FinancialIQSystem:
         self.embeddings = None
         self.processor = SECFilingProcessor()
         
+        # Google Cloud configuration
+        self.index_id = os.getenv("VERTEX_AI_INDEX_ID")
+        self.endpoint_id = os.getenv("VERTEX_AI_ENDPOINT_ID")
+        self.index_data_bucket = os.getenv("VERTEX_AI_EMBEDDINGS_BUCKET")
+        
+        if not all([self.index_id, self.endpoint_id, self.index_data_bucket]):
+            raise ValueError("Missing required Google Cloud configuration. Please check environment variables.")
+        
     def setup_system(self, load_existing: bool = False):
         """Setup the system with vector store and embeddings"""
         try:
-            # Initialize embeddings
-            self.embeddings = HuggingFaceEmbeddings(
-                model_name="sentence-transformers/all-MiniLM-L6-v2",
-                model_kwargs={"device": "cpu"}
+            # Initialize Vertex AI embeddings
+            self.embeddings = VertexAIEmbeddings(
+                project=self.project_id,
+                location=self.location,
+                model_name="textembedding-gecko@001"
             )
             
-            # Load or create vector store
-            vector_store_path = "data/vector_store"
-            if load_existing and os.path.exists(vector_store_path):
-                self.vector_store = FAISS.load_local(
-                    vector_store_path,
-                    self.embeddings,
-                    allow_dangerous_deserialization=True  # Allow deserialization since we trust our own data
-                )
-                print("Loaded existing vector store")
-            else:
-                raise ValueError("Vector store not found. Please run initialization script first.")
+            # Initialize Vector Search vector store
+            self.vector_store = VectorSearchVectorStore.from_components(
+                project_id=self.project_id,
+                region=self.location,
+                gcs_bucket_name=self.index_data_bucket,
+                index_id=self.index_id,
+                embedding=self.embeddings,
+                endpoint_id=self.endpoint_id,
+                stream_update=True
+            )
+            print("Initialized Google Cloud Vector Search")
                 
             return True
         except Exception as e:
